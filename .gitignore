@@ -1,0 +1,5 @@
+# _obj_ directory if exists contains objects
+/_obj_
+# Various outputs
+/aluemu
+/aluemu.exe
