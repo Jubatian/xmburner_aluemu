@@ -46,44 +46,22 @@ ifeq ($(TSYS),windows_mingw)
 CCNAT?=gcc
 CCOMP?=$(CCNAT)
 endif
-ifeq ($(TSYS),emscripten)
-CCNAT?=gcc
-CCOMP?=emcc
-endif
 #
 #
 # Linux - specific
 #
 ifeq ($(TSYS),linux)
 CFLAGS+= -DTARGET_LINUX
-LINKB= -lSDL2
-ENABLE_VCAP=$(FLAG_VCAP)
+LINKB=
 endif
 #
 #
 # Windows - MinGW specific
 #
 ifeq ($(TSYS),windows_mingw)
-OUT=cuzebox.exe
-CFLAGS+= -DTARGET_WINDOWS_MINGW -Dmain=SDL_main
-LINKB= -lmingw32 -lSDL2main -lSDL2 -mwindows
-ENABLE_VCAP=$(FLAG_VCAP)
-CHCONV=chconv.exe
-BINCONV=binconv.exe
-endif
-#
-#
-# Emscripten - specific
-#
-ifeq ($(TSYS),emscripten)
-OUT=cuzebox.html
-CFLAGS+= -DTARGET_EMSCRIPTEN -DUSE_SDL1 -s USE_SDL=1 -s NO_EXIT_RUNTIME=1 -s NO_DYNAMIC_EXECUTION=1
-ENABLE_VCAP=0
-ifeq ($(FLAG_SELFCONT),0)
-ifeq ($(FLAG_NOGAMEFILE),0)
-LINKB= --preload-file gamefile.uze
-endif
-endif
+OUT=aluemu.exe
+CFLAGS+= -DTARGET_WINDOWS_MINGW
+LINKB= -lmingw32 -mwindows
 endif
 #
 #
@@ -98,13 +76,8 @@ endif
 #
 # 'Production' edit
 #
-ifeq ($(TSYS),emscripten)
-CFSPD?=-O3 --llvm-lto 3 -s ASSERTIONS=0 -s AGGRESSIVE_VARIABLE_ELIMINATION=1
-CFSIZ?=-Os --llvm-lto 3 -s ASSERTIONS=0
-else
 CFSPD?=-O3 -s -flto
 CFSIZ?=-Os -s -flto
-endif
 #
 #
 # Now on the way...
@@ -112,31 +85,8 @@ endif
 
 LINKB?=
 LINK= $(LINKB)
-OUT?=cuzebox
-CHCONV?=chconv
-BINCONV?=binconv
+OUT?=aluemu
 CC=$(CCOMP)
-ifneq ($(ENABLE_VCAP),0)
-CFLAGS+= -DENABLE_VCAP=1
-endif
-ifneq ($(FLAG_DISPLAY_GAMEONLY),0)
-CFLAGS+= -DFLAG_DISPLAY_GAMEONLY=1
-endif
-ifneq ($(FLAG_DISPLAY_SMALL),0)
-CFLAGS+= -DFLAG_DISPLAY_SMALL=1
-endif
-ifneq ($(FLAG_DISPLAY_FRAMEMERGE),0)
-CFLAGS+= -DFLAG_DISPLAY_FRAMEMERGE=1
-endif
-ifneq ($(FLAG_SELFCONT),0)
-CFLAGS+= -DFLAG_SELFCONT=1
-endif
-ifneq ($(FLAG_NOCONSOLE),0)
-CFLAGS+= -DFLAG_NOCONSOLE=1
-endif
-ifneq ($(FLAG_NATIVE),0)
-CFLAGS+= -DFLAG_NATIVE=1
-endif
 
 OBD=_obj_
 

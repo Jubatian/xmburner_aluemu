@@ -30,8 +30,6 @@
 #include "cu_avr.h"
 #include "cu_avrc.h"
 #include "cu_avrfg.h"
-#include "cu_ctr.h"
-#include "cu_spi.h"
 
 
 
@@ -343,7 +341,6 @@ static void cu_avr_hwexec(void)
    cpu_state.iors[CU_IO_SPSR] |= 0x80U; /* SPI interrupt */
    event_it = TRUE;
    cpu_state.iors[CU_IO_SPDR] = cpu_state.spi_rx;
-   cu_spi_send(cpu_state.spi_tx, cpu_state.cycle);
 
   }else{
 
@@ -547,8 +544,6 @@ static void  cu_avr_write_io(auint port, auint val)
     pio = pval & cpu_state.iors[CU_IO_PORTA];
     cio = cval & cpu_state.iors[CU_IO_PORTA];
    }
-   cpu_state.iors[CU_IO_PINA] = cu_ctr_process(pio, cio);
-   cu_spi_cs_set(CU_SPI_CS_RAM, (cio & 0x10U) == 0U, cpu_state.cycle);
    break;
 
   case CU_IO_PORTB:   /* Sync output */
@@ -689,7 +684,6 @@ static void  cu_avr_write_io(auint port, auint val)
    }else{
     cio = cval & cpu_state.iors[CU_IO_PORTD];
    }
-   cu_spi_cs_set(CU_SPI_CS_SD, (cio & 0x40U) == 0U, cpu_state.cycle);
    break;
 
   case CU_IO_OCR2A:   /* PWM audio output */
@@ -743,7 +737,7 @@ static void  cu_avr_write_io(auint port, auint val)
           (WRAP32(cpu_state.spi_end - cpu_state.cycle)) ){
       cycle_next_event = cpu_state.spi_end; /* Set SPI HW processing target */
      }
-     cpu_state.spi_rx = cu_spi_recv(cpu_state.cycle);
+     cpu_state.spi_rx = 0xFFU;
      cpu_state.spi_tx = cval;
     }
    }
@@ -899,15 +893,7 @@ static auint cu_avr_read_io(auint port)
 ** Emulates a single (compiled) AVR instruction and any associated hardware
 ** tasks.
 */
-#ifdef __EMSCRIPTEN__
-#ifndef FLAG_NATIVE
 #include "cu_avr_e.h"
-#else
-#include "cu_avr_n.h"
-#endif
-#else
-#include "cu_avr_n.h"
-#endif
 
 
 
@@ -987,9 +973,6 @@ void  cu_avr_reset(void)
 
  cu_avr_crom_update(0U, 65536U);
  cu_avr_io_update();
-
- cu_ctr_reset();
- cu_spi_reset(cpu_state.cycle);
 
  cpu_state.crom_mod = FALSE; /* Initial code ROM state: not modified. */
 }
