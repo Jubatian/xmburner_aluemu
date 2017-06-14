@@ -59,6 +59,8 @@ int main (int argc, char** argv)
 
  cu_avr_run();
 
+ print_unf("\nDone\n");
+
  filesys_flushall();
 
  return 0;

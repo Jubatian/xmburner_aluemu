@@ -419,6 +419,34 @@ static void  cu_avr_write_io(auint port, auint val)
     event_it = TRUE;  /* Interrupts become enabled, so check them */
    }
 
+  case 0xE0U:         /* Single character output */
+
+   print_message("%c", cval);
+   break;
+
+  case 0xE1U:         /* Decimal number output */
+
+   print_message("%u", cval);
+   break;
+
+  case 0xE2U:         /* Hexadecimal number output */
+
+   print_message("%02X", cval);
+   break;
+
+  case 0xE3U:         /* Binary number output */
+
+   print_message("%u%u%u%u%u%u%u%u",
+                 (cval >> 7) & 1U,
+                 (cval >> 6) & 1U,
+                 (cval >> 5) & 1U,
+                 (cval >> 4) & 1U,
+                 (cval >> 3) & 1U,
+                 (cval >> 2) & 1U,
+                 (cval >> 1) & 1U,
+                 (cval     ) & 1U);
+   break;
+
   default:
 
    break;
