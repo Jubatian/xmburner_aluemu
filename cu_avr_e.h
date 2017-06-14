@@ -426,38 +426,6 @@ static void op_16(auint arg1, auint arg2) /* ANDI */
 
 static void op_17(auint arg1, auint arg2) /* SPM */
 {
- auint tmp;
- auint res;
- if ( ((cpu_state.iors[CU_IO_SPMCSR] & 0x01U) != 0U) && /* SPM instruction enabled */
-      (!cpu_state.spm_prge) ){            /* Programming is not in progress */
-  if ( (cpu_state.spm_mode == 0x02U) ||   /* Page erase */
-       (cpu_state.spm_mode == 0x04U) ){   /* Page write */
-   res = (auint)(cpu_state.iors[31]) << 8;
-   if (cpu_state.spm_mode == 0x02U){      /* Page erase */
-    for (tmp = 0U; tmp < 256U; tmp ++){ cpu_state.crom[tmp + res]  = 0xFFU; }
-   }else{                                 /* Page write */
-    for (tmp = 0U; tmp < 256U; tmp ++){ cpu_state.crom[tmp + res] &= cpu_state.sbuf[tmp]; }
-   }
-   if (res != 0U){ cu_avr_crom_update(res - 2U, 258U); } /* Fix 2 word instructions crossing page boundary */
-   else          { cu_avr_crom_update(res,      256U); }
-   cpu_state.spm_prge = TRUE;
-   cpu_state.iors[CU_IO_SPMCSR] |= 0x40U; /* RRW section busy */
-   cpu_state.spm_end  = WRAP32(SPM_PROG_TIM + cpu_state.cycle);
-   if ( (WRAP32(cycle_next_event  - cpu_state.cycle)) >
-        (WRAP32(cpu_state.spm_end - cpu_state.cycle)) ){
-    cycle_next_event = cpu_state.spm_end; /* Set SPM HW processing target */
-   }
-   cpu_state.crom_mod = TRUE;             /* Code ROM modified */
-  }else if (cpu_state.spm_mode == 0x08U){ /* Boot lock bit set (unimplemented) */
-   cpu_state.iors[CU_IO_SPMCSR] &= 0xE0U;
-  }else if (cpu_state.spm_mode == 0x10U){ /* RWW section read enable */
-   cpu_state.iors[CU_IO_SPMCSR] &= 0xA0U;
-  }else{                                  /* Page loading (temp. buffer filling) */
-   cpu_state.sbuf[(cpu_state.iors[30] & 0xFEU) + 0U] = cpu_state.iors[0];
-   cpu_state.sbuf[(cpu_state.iors[30] & 0xFEU) + 1U] = cpu_state.iors[1];
-   cpu_state.iors[CU_IO_SPMCSR] &= 0xA0U;
-  }
- }
  cy4_tail();
 }
 
@@ -712,18 +680,6 @@ static void op_35(auint arg1, auint arg2) /* BREAK */
 
 static void op_36(auint arg1, auint arg2) /* WDR */
 {
- cpu_state.wd_end = WRAP32(cu_avr_getwdto() + cpu_state.cycle);
- if ( (WRAP32(cycle_next_event - cpu_state.cycle)) >
-      (WRAP32(cpu_state.wd_end - cpu_state.cycle)) ){
-  cycle_next_event = cpu_state.wd_end; /* Set Watchdog timeout HW processing target */
- }
- if ( (WRAP32(cpu_state.cycle - wd_last)) < wd_interval_min[0] ){ /* WDR debug counter */
-  wd_interval_min[0] = WRAP32(cpu_state.cycle - wd_last);
-  wd_interval_beg[0] = wd_last_pc;
-  wd_interval_end[0] = (cpu_state.pc - 1U) & 0x7FFFU;
- }
- wd_last    = cpu_state.cycle;
- wd_last_pc = (cpu_state.pc - 1U) & 0x7FFFU;
  cy1_tail();
 }
 

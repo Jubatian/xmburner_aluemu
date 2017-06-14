@@ -56,32 +56,6 @@ uint8           cpu_pflags[CU_AVRFG_SIZE];
 /* Whether the flags were already precalculated */
 boole           pflags_done = FALSE;
 
-/* Row generation structure */
-cu_row_t        video_row;
-
-/* Frame information structure */
-cu_frameinfo_t  video_frame;
-
-/* Sync pulse counter (0 - 270) */
-auint           video_pulsectr;
-
-/* Cycle of previous edge of sync signal */
-auint           video_pedge;
-
-/* Cycle of previous rising edge of sync signal (used to find VSync) */
-auint           video_prise;
-
-/* Row generation flag (passes when a row has to be signalled) */
-boole           video_rowflag;
-
-/* Cycle counter within row. At most approx. 2010 */
-auint           video_cycle;
-
-/* A tiny sample FIFO to align sample output with rows cleanly */
-auint           audio_samples[4U];
-auint           audio_rp;
-auint           audio_wp;
-
 /* Next hardware event's cycle. It can be safely set to
 ** WRAP32(cpu_state.cycle + 1U) to force full processing next time. */
 auint           cycle_next_event;
@@ -102,46 +76,6 @@ boole           event_it_enter;
 /* Vector to call when entering interrupt */
 auint           event_it_vect;
 
-/* EEPROM change indicator */
-boole           eeprom_changed;
-
-/* Watchdog-based debug counter: Time of last WDR execution */
-auint           wd_last;
-
-/* Watchdog-based debug counter: PC of last WDR execution */
-auint           wd_last_pc;
-
-/* Watchdog-based debug counter: Smallest interval between two WDR calls in a
-** frame. Index 0 is the work value, Index 1 is the latched value. */
-auint           wd_interval_min[2];
-
-/* Watchdog-based debug counter: PC of baginning WDR of interval. Index 0 is
-** the work value, Index 1 is the latched value. */
-auint           wd_interval_beg[2];
-
-/* Watchdog-based debug counter: PC of ending WDR of interval. Index 0 is the
-** work value, Index 1 is the latched value. */
-auint           wd_interval_end[2];
-
-
-
-/* Watchdog 16 millisecond timer base tick count */
-#define WD_16MS_BASE (458176U - 1024U)
-
-/* Watchdog timing seed mask base, used to mask for the 16 ms timer */
-#define WD_SEED_MASK 2048U
-
-/* EEPROM programming time base, assume ~1.75ms */
-#define EEPROM_EWR_TIM 50000U
-
-/* SPM programming time base, assuming ~4ms */
-#define SPM_PROG_TIM 100000U
-
-/* Maximal cycles in a video scanline (above which sync error is returned) */
-#define VIDEO_CY_MAX 1920U
-
-/* Watchdog-based debug counter: Maximal interval to display */
-#define WD_INTERVAL_MAX (VIDEO_CY_MAX * 262U / 2U)
 
 
 /* Flags in CU_IO_SREG */
@@ -209,8 +143,6 @@ auint           wd_interval_end[2];
  do{ \
   cpu_state.cycle = WRAP32(cpu_state.cycle + 1U); \
   if (cycle_next_event == cpu_state.cycle){ cu_avr_hwexec(); } \
-  video_row.pixels[video_cycle] = cpu_state.iors[CU_IO_PORTC]; \
-  video_cycle ++; \
  }while(0)
 
 /* Macro for consuming last instruction cycle before which ITs are triggered */
@@ -229,28 +161,12 @@ auint           wd_interval_end[2];
 
 /* Reset */
 #define VECT_RESET     0x0000U
-/* Watchdog */
-#define VECT_WDT       0x0010U
 /* Timer1 Comparator A */
 #define VECT_T1COMPA   0x001AU
 /* Timer1 Comparator B */
 #define VECT_T1COMPB   0x001CU
 /* Timer1 Overflow */
 #define VECT_T1OVF     0x001EU
-/* SPI */
-#define VECT_SPISTC    0x0026U
-
-
-
-/*
-** Get Watchdog timeout ticks (WDP3 ignored, should be zero)
-*/
-static auint cu_avr_getwdto(void)
-{
- auint presc = cpu_state.iors[CU_IO_WDTCSR] & 7U;
- return ( ((auint)(WD_16MS_BASE) << presc) +
-          (cpu_state.wd_seed & (((auint)(WD_SEED_MASK) << presc) - 1U)) );
-}
 
 
 
@@ -314,110 +230,6 @@ static void cu_avr_hwexec(void)
 
  }
 
- /* Watchdog (in Uzebox used to seed random number generators) */
-
- if ((cpu_state.iors[CU_IO_WDTCSR] & 0x48U) != 0U){ /* Watchdog is operational */
-
-  /* Assume interrupt mode (this is used for random number generator seeding) */
-
-  if (cpu_state.cycle == cpu_state.wd_end){
-   cpu_state.iors[CU_IO_WDTCSR] |= 0x80U; /* Watchdog interrupt */
-   event_it = TRUE;
-   cpu_state.wd_end  = WRAP32(cu_avr_getwdto() + cpu_state.cycle);
-  }
-
-  t0 = WRAP32(cpu_state.wd_end - cpu_state.cycle);
-  if (nextev > t0){ nextev = t0; }
-
- }
-
- /* SPI peripherals (SD card, SPI RAM) */
-
- if (cpu_state.spi_tran){
-
-  if (cpu_state.cycle == cpu_state.spi_end){
-
-   cpu_state.spi_tran = FALSE;
-   cpu_state.iors[CU_IO_SPSR] |= 0x80U; /* SPI interrupt */
-   event_it = TRUE;
-   cpu_state.iors[CU_IO_SPDR] = cpu_state.spi_rx;
-
-  }else{
-
-   t0 = WRAP32(cpu_state.spi_end - cpu_state.cycle);
-   if (nextev > t0){ nextev = t0; }
-
-  }
-
- }
-
- /* EEPROM */
-
- if (cpu_state.eep_wrte){
-
-  if (cpu_state.cycle == cpu_state.eep_end){
-
-   cpu_state.eep_wrte = FALSE;
-   t0 = cpu_state.iors[CU_IO_EECR] & 0x30U; /* EEPROM write mode */
-   t1 = ( ((auint)(cpu_state.iors[CU_IO_EEARH]) << 8) |
-          ((auint)(cpu_state.iors[CU_IO_EEARL])     ) ) & 0x7FFU;
-   t2 = cpu_state.eepr[t1];
-   if       (t0 == 0x00U){ /* Erase and Write */
-    cpu_state.eepr[t1]  = cpu_state.iors[CU_IO_EEDR];
-   }else if (t0 == 0x10U){ /* Erase only */
-    cpu_state.eepr[t1]  = 0xFFU;
-   }else if (t0 == 0x20U){ /* Write only */
-    cpu_state.eepr[t1] |= cpu_state.iors[CU_IO_EEDR];
-   }else{                  /* Reserved: Do nothing */
-   }
-   if (t2 != t1){ eeprom_changed = TRUE; }
-   cpu_state.iors[CU_IO_EECR] &= ~0x02U; /* Clear EEPE (programming completed) */
-
-  }else{
-
-   t0 = WRAP32(cpu_state.eep_end - cpu_state.cycle);
-   if (nextev > t0){ nextev = t0; }
-
-  }
-
- }else if ((cpu_state.iors[CU_IO_EECR] & 0x04U) != 0U){
-
-  if (cpu_state.cycle == cpu_state.eep_end){
-   cpu_state.iors[CU_IO_EECR] &= ~0x04U; /* Clear EEMPE (disable programming) */
-  }else{
-   t0 = WRAP32(cpu_state.eep_end - cpu_state.cycle);
-   if (nextev > t0){ nextev = t0; }
-  }
-
- }else{}
-
- /* SPM */
-
- if (cpu_state.spm_prge){
-
-  if (cpu_state.cycle == cpu_state.spm_end){
-
-   cpu_state.spm_prge = FALSE; /* Completed erasing / programming */
-   cpu_state.iors[CU_IO_SPMCSR] &= ~0x1FU;
-
-  }else{
-
-   t0 = WRAP32(cpu_state.spm_end - cpu_state.cycle);
-   if (nextev > t0){ nextev = t0; }
-
-  }
-
- }else if ((cpu_state.iors[CU_IO_SPMCSR] & 0x01U) != 0U){
-
-  if (cpu_state.cycle == cpu_state.spm_end){
-   cpu_state.iors[CU_IO_SPMCSR] &= ~0x01U; /* Cancel SPM instruction */
-  }else{
-   t0 = WRAP32(cpu_state.spm_end - cpu_state.cycle);
-   if (nextev > t0){ nextev = t0; }
-  }
-
- }else{}
-
  /* Calculate next event's cycle */
 
  cycle_next_event = WRAP32(cpu_state.cycle + nextev);
@@ -475,20 +287,7 @@ static void cu_avr_itcheck(void)
 
  vbase = ((cpu_state.iors[CU_IO_MCUCR] >> 1) & 1U) * VBASE_BOOT;
 
- if       ( (cpu_state.iors[CU_IO_SPCR] &
-             cpu_state.iors[CU_IO_SPSR] & 0x80U)   !=    0U ){ /* SPI */
-
-  cpu_state.iors[CU_IO_SPSR] ^= 0x80U;
-  event_it_enter = TRUE;
-  event_it_vect  = vbase + VECT_SPISTC;
-
- }else if ( (cpu_state.iors[CU_IO_WDTCSR] & 0xC0U) == 0xC0U ){ /* Watchdog */
-
-  cpu_state.iors[CU_IO_WDTCSR] ^= 0x80U; /* Assume interrupt mode (only clearing the WDIF flag) */
-  event_it_enter = TRUE;
-  event_it_vect  = vbase + VECT_WDT;
-
- }else if ( (cpu_state.iors[CU_IO_TIFR1] &
+ if       ( (cpu_state.iors[CU_IO_TIFR1] &
              cpu_state.iors[CU_IO_TIMSK1] & 0x02U) !=    0U ){ /* Timer 1 Comparator A */
 
   cpu_state.iors[CU_IO_TIFR1] ^= 0x02U;
@@ -525,10 +324,7 @@ static void  cu_avr_write_io(auint port, auint val)
 {
  auint pval = cpu_state.iors[port]; /* Previous value */
  auint cval = val & 0xFFU;          /* Current (requested) value */
- auint pio;
- auint cio;
  auint t0;
- auint t1;
 
  access_io[port] |= CU_MEM_W;
 
@@ -537,134 +333,10 @@ static void  cu_avr_write_io(auint port, auint val)
   case CU_IO_PORTA:   /* Controller inputs, SPI RAM Chip Select */
   case CU_IO_DDRA:
 
-   if (port == CU_IO_PORTA){
-    pio = pval & cpu_state.iors[CU_IO_DDRA];
-    cio = cval & cpu_state.iors[CU_IO_DDRA];
-   }else{
-    pio = pval & cpu_state.iors[CU_IO_PORTA];
-    cio = cval & cpu_state.iors[CU_IO_PORTA];
-   }
    break;
 
   case CU_IO_PORTB:   /* Sync output */
   case CU_IO_DDRB:
-
-   if (port == CU_IO_PORTB){
-    pio = pval & cpu_state.iors[CU_IO_DDRB];
-    cio = cval & cpu_state.iors[CU_IO_DDRB];
-   }else{
-    pio = pval & cpu_state.iors[CU_IO_PORTB];
-    cio = cval & cpu_state.iors[CU_IO_PORTB];
-   }
-
-   if (((pio ^ cio) & 1U) != 0U){   /* Sync edge */
-
-    t0 = WRAP32(cpu_state.cycle - video_pedge); /* Cycles elapsed since previous edge */
-    video_pedge = cpu_state.cycle;
-
-    if ((cio & 1U) == 1U){      /* Rising edge */
-
-     if ( (video_pulsectr <= 268U) &&
-          (video_pulsectr != 251U) ){
-      video_pulsectr ++;
-     }
-     if (video_pulsectr <  252U){
-      video_frame.rowcdif ++;
-     }
-     if (video_pulsectr == 270U){
-      video_pulsectr      = 0U;
-      video_frame.rowcdif = 0U - 252U;
-     }
-     t1 = WRAP32(cpu_state.cycle - video_prise);
-     video_prise = cpu_state.cycle;
-     if       ( (t1 >=  944U) &&
-                (t1 <= 1012U) && /* Sync to first normal pulse (978 cycles apart from last rise) */
-                (video_pulsectr >= 252U) ){
-      video_pulsectr = 270U;
-     }else if ( (t1 >= 1718U) &&
-                (t1 <= 1786U) ){ /* Sync to first VSync pulse (1752 cycles apart from last rise) */
-      video_pulsectr = 252U;
-     }else{}
-
-     if ( (video_pulsectr < 252U) ||
-          (video_pulsectr == 270U) ){ /* 0 - 251 & 270 are normal rises 136 cycles after the fall */
-      video_frame.pulse[video_pulsectr].rise = t0 - 136U;
-     }else{
-      switch (video_pulsectr){
-       case 252U:
-       case 253U:
-       case 254U:
-       case 255U:
-       case 256U:
-       case 257U:                /* 251 - 257 come 68 cycles after the fall */
-        video_frame.pulse[video_pulsectr].rise = t0 - 68U;
-        break;
-       case 258U:
-       case 259U:
-       case 260U:
-       case 261U:
-       case 262U:
-       case 263U:                /* 258 - 263 come 774 cycles after the fall */
-        video_frame.pulse[video_pulsectr].rise = t0 - 774U;
-        break;
-       case 264U:
-       case 265U:
-       case 266U:
-       case 267U:
-       case 268U:
-       case 269U:                /* 264 - 269 come 68 cycles after the fall */
-        video_frame.pulse[video_pulsectr].rise = t0 - 68U;
-        break;
-       default:                  /* Out of sync */
-        break;
-      }
-     }
-
-    }else{                       /* Falling edge */
-
-     if ( (video_pulsectr < 252U) ||
-          (video_pulsectr == 270U) ){ /* 0 - 251 & 270 are normal falls 1684 cycles after the rise */
-      video_frame.pulse[video_pulsectr].fall = t0 - 1684U;
-      video_rowflag = TRUE;      /* Trigger new row */
-      video_cycle   = VIDEO_CY_MAX; /* Also flags new row */
-     }else{
-      switch (video_pulsectr){
-       case 252U:
-       case 253U:
-       case 254U:
-       case 255U:
-       case 256U:
-       case 257U:                /* 252 - 257 come 842 cycles after the rise */
-        video_frame.pulse[video_pulsectr].fall = t0 - 842U;
-        break;
-       case 258U:
-       case 259U:
-       case 260U:
-       case 261U:
-       case 262U:
-       case 263U:                /* 258 - 263 come 136 cycles after the rise */
-        video_frame.pulse[video_pulsectr].fall = t0 - 136U;
-        break;
-       case 264U:
-       case 265U:
-       case 266U:
-       case 267U:
-       case 268U:
-       case 269U:                /* 264 - 269 come 842 cycles after the rise */
-        video_frame.pulse[video_pulsectr].fall = t0 - 842U;
-        break;
-       default:                  /* Out of sync */
-        break;
-      }
-      if ((video_pulsectr & 1U) != 0U){
-       video_rowflag = TRUE;    /* Odd pulses trigger new row */
-       video_cycle   = VIDEO_CY_MAX; /* Also flags new row */
-      }
-     }
-
-    }
-
-   }
 
    break;
 
@@ -679,20 +351,11 @@ static void  cu_avr_write_io(auint port, auint val)
   case CU_IO_PORTD:   /* SD card Chip Select */
   case CU_IO_DDRD:
 
-   if (port == CU_IO_PORTD){
-    cio = cval & cpu_state.iors[CU_IO_DDRD];
-   }else{
-    cio = cval & cpu_state.iors[CU_IO_PORTD];
-   }
    break;
 
   case CU_IO_OCR2A:   /* PWM audio output */
 
-   if (cpu_state.iors[CU_IO_TCCR2B] != 0U){
-    audio_samples[audio_wp] = cval;
-    if (audio_rp == audio_wp){ audio_rp = (audio_rp + 1U) & 0x3U; }
-    audio_wp = (audio_wp + 1U) & 0x3U;
-   }
+   break;
 
   case CU_IO_TCNT1H:  /* Timer1 counter, high */
 
@@ -722,25 +385,6 @@ static void  cu_avr_write_io(auint port, auint val)
 
   case CU_IO_SPDR:    /* SPI data */
 
-   cpu_state.iors[CU_IO_SPSR] &= ~0x80U;
-   /* Note: By the doc first a read would be necessary for clearing SPIF here,
-   ** but that's a very unusual use case, so ignored */
-   if ((cpu_state.iors[CU_IO_SPCR] & 0x40U) != 0U){ /* SPI enabled */
-    if (cpu_state.spi_tran){                /* Already sending */
-     cpu_state.iors[CU_IO_SPSR] |= 0x40U;   /* Signal write collision */
-    }else{
-     cpu_state.spi_tran = TRUE;
-     cpu_state.spi_end  = WRAP32( cpu_state.cycle +
-          (16U << ( ((cpu_state.iors[CU_IO_SPCR] & 0x3U) << 1) |
-                    ((cpu_state.iors[CU_IO_SPSR] & 0x1U) ^ 1U) )) );
-     if ( (WRAP32(cycle_next_event  - cpu_state.cycle)) >
-          (WRAP32(cpu_state.spi_end - cpu_state.cycle)) ){
-      cycle_next_event = cpu_state.spi_end; /* Set SPI HW processing target */
-     }
-     cpu_state.spi_rx = 0xFFU;
-     cpu_state.spi_tx = cval;
-    }
-   }
    break;
 
   case CU_IO_SPCR:    /* SPI control */
@@ -753,91 +397,20 @@ static void  cu_avr_write_io(auint port, auint val)
 
   case CU_IO_EECR:    /* EEPROM control */
 
-   if ((pval & 0x04U) == 0U){
-    cval &= ~0x02U;   /* Without EEMPE, programming (EEPE) can not start */
-   }else{
-    cpu_state.eep_end  = WRAP32(cpu_state.cycle + 4U); /* Open EEPE window (4 cycles) */
-    if ( (WRAP32(cycle_next_event  - cpu_state.cycle)) >
-         (WRAP32(cpu_state.eep_end - cpu_state.cycle)) ){
-     cycle_next_event = cpu_state.eep_end; /* Set EEPROM HW processing target */
-    }
-   }
-
-   if ( ((pval & 0x02U) == 0U) &&
-        ((cval & 0x02U) != 0U) ){ /* Programming started */
-    cpu_state.eep_wrte = TRUE;
-    t0 = cpu_state.iors[CU_IO_EECR] & 0x30U;  /* EEPROM write mode */
-    cpu_state.eep_end  = EEPROM_EWR_TIM;
-    if (t0 == 0U){ cpu_state.eep_end *= 2U; } /* Erase + Write */
-    cpu_state.eep_end  = WRAP32(cpu_state.eep_end + cpu_state.cycle);
-    if ( (WRAP32(cycle_next_event  - cpu_state.cycle)) >
-         (WRAP32(cpu_state.eep_end - cpu_state.cycle)) ){
-     cycle_next_event = cpu_state.eep_end; /* Set EEPROM HW processing target */
-    }
-    UPDATE_HARDWARE;  /* 2 cycles write stall. */
-    UPDATE_HARDWARE;  /* Note: IT checks are slightly off due to this, but this inaccuracy is tolerable. */
-    cval &= ~0x04U;   /* Turn off EEMPE (succesfully entered programming) */
-   }
-
-   if (cval & 0x01U){ /* EEPROM read (EERE) strobe */
-    if (!cpu_state.eep_wrte){ /* During writing it can't be done */
-     t0 = ( ((auint)(cpu_state.iors[CU_IO_EEARH]) << 8) |
-            ((auint)(cpu_state.iors[CU_IO_EEARL])     ) ) & 0x7FFU;
-     cpu_state.iors[CU_IO_EEDR] = cpu_state.eepr[t0];
-     UPDATE_HARDWARE;
-     UPDATE_HARDWARE;
-     UPDATE_HARDWARE; /* 4 cycles read stall. */
-     UPDATE_HARDWARE; /* Note: IT checks are slightly off due to this, but this inaccuracy is tolerable. */
-    }
-    cval &= ~0x01U;
-    /* Note: The EERE bit is a little hazy, it is not described whether it is
-    ** cleared after write or not, the SBI / CBI instructions might work
-    ** differently on this port than read + mask + write. Clearing it however
-    ** works for the documented usage (the bit is never read anyway). */
-   }
    break;
 
   case CU_IO_EEARH:   /* EEPROM address & data registers */
   case CU_IO_EEARL:
   case CU_IO_EEDR:
 
-   if (cpu_state.eep_wrte){
-    cval = pval;      /* During EEPROM programming, these can't be modified */
-   }
    break;
 
   case CU_IO_WDTCSR:  /* Watchdog timer control */
 
-   if ( ((pval & 0x48U) == 0U) &&
-        ((cval & 0x48U) != 0U) ){ /* Watchdog becomes enabled, so start it */
-    cpu_state.wd_end = WRAP32(cu_avr_getwdto() + cpu_state.cycle);
-    if ( (WRAP32(cycle_next_event - cpu_state.cycle)) >
-         (WRAP32(cpu_state.wd_end - cpu_state.cycle)) ){
-     cycle_next_event = cpu_state.wd_end; /* Set Watchdog timeout HW processing target */
-    }
-   }
    break;
 
   case CU_IO_SPMCSR:  /* Store program memory control & status */
 
-   cval = (cval & (~0x40U)) | (pval & 0x40U); /* RRWSB bit can not be written */
-   if ( ((pval & 0x01U) == 0U) &&
-        ((cval & 0x01U) != 0U) && /* SPM enable just turned on */
-        (!cpu_state.spm_prge) ){
-    t0 = cval & 0x1EU;    /* SPM mode select bits */
-    if ( (t0 == 0x00U) || /* Page load (filling temp buffer) */
-         (t0 == 0x02U) || /* Page erase */
-         (t0 == 0x04U) || /* Page write */
-         (t0 == 0x08U) || /* Boot lock bit set */
-         (t0 == 0x10U) ){ /* RWW section read enable */
-     cpu_state.spm_mode = t0;
-     cpu_state.spm_end  = WRAP32(cpu_state.cycle + 4U);
-     if ( (WRAP32(cycle_next_event  - cpu_state.cycle)) >
-          (WRAP32(cpu_state.spm_end - cpu_state.cycle)) ){
-      cycle_next_event = cpu_state.spm_end; /* Set SPM HW processing target */
-     }
-    }
-   }
    break;
 
   case CU_IO_SREG:    /* Status register */
@@ -914,15 +487,6 @@ void  cu_avr_reset(void)
   access_io[i] = 0U;
  }
 
- for (i = 0U; i < 271U; i++){
-  video_frame.pulse[i].rise = CU_NOSYNC;
-  video_frame.pulse[i].fall = CU_NOSYNC;
- }
-
- for (i = 0U; i < 4U; i++){
-  audio_samples[i] = 0x80U;
- }
-
  for (i = 0U; i < 256U; i++){ /* Most I/O regs are reset to zero */
   cpu_state.iors[i] = 0U;
  }
@@ -941,30 +505,10 @@ void  cu_avr_reset(void)
  cpu_state.pc = (((cpu_state.iors[CU_IO_MCUCR] >> 1) & 1U) * VBASE_BOOT) + VECT_RESET;
 
  cpu_state.cycle    = 0U;
- video_pulsectr     = 0U;
- video_pedge        = cpu_state.cycle;
- video_prise        = cpu_state.cycle;
- video_rowflag      = FALSE;
- video_cycle        = 0U;
- audio_rp           = 0U;
- audio_wp           = 0U;
  cycle_next_event   = WRAP32(cpu_state.cycle + 1U);
  timer1_base        = cpu_state.cycle;
  event_it           = TRUE;
  event_it_enter     = FALSE;
- wd_last            = cpu_state.cycle;
- wd_last_pc         = 0U;
- cpu_state.spi_tran = FALSE;
- cpu_state.wd_end   = WRAP32(cu_avr_getwdto() + cpu_state.cycle);
- cpu_state.eep_wrte = FALSE;
- cpu_state.spm_prge = FALSE;
-
- wd_interval_min[0] = WD_INTERVAL_MAX;
- wd_interval_min[1] = 0U;
- wd_interval_beg[0] = 0U;
- wd_interval_beg[1] = 0U;
- wd_interval_end[0] = 0U;
- wd_interval_end[1] = 0U;
 
  if (!pflags_done){
   cu_avrfg_fill(&cpu_pflags[0]);
@@ -985,56 +529,13 @@ void  cu_avr_reset(void)
 */
 auint cu_avr_run(void)
 {
- auint ret = 0U;
  auint i;
 
- video_rowflag = FALSE;
-
- while (video_cycle < VIDEO_CY_MAX){ /* Also signals proper row end */
+ for (i = 0U; i < 2048U; i++){
   cu_avr_exec();       /* Note: This inlines as only this single call exists */
  }
- video_cycle -= VIDEO_CY_MAX; /* Next line pixels */
 
- if (video_rowflag){
-
-  ret |= CU_GET_ROW;
-
-  audio_rp = (audio_rp + 1U) & 0x3U;
-  if (audio_rp == audio_wp){ audio_rp = (audio_rp - 1U) & 0x3U; }
-  video_row.sample = audio_samples[audio_rp];
-
-  video_row.pno = video_pulsectr;
-
-  if (video_pulsectr == 270U){ /* Frame completed, can return it */
-
-   ret |= CU_GET_FRAME;
-
-   if (wd_interval_min[0] < WD_INTERVAL_MAX){ /* Latch WDR interval debug counter */
-    wd_interval_min[1] = wd_interval_min[0];
-    wd_interval_end[1] = wd_interval_end[0];
-    wd_interval_beg[1] = wd_interval_beg[0];
-   }
-   wd_interval_min[0] = WD_INTERVAL_MAX; /* Clear for next frame */
-   wd_interval_beg[0] = 0U;
-   wd_interval_end[0] = 0U;
-
-  }else if (video_pulsectr == 0U){
-
-   for (i = 1U; i < 271U; i++){ /* Clear sync info for next frame (pulse 0 is already produced here) */
-    video_frame.pulse[i].rise = CU_NOSYNC;
-    video_frame.pulse[i].fall = CU_NOSYNC;
-   }
-
-  }
-
- }else{ /* (Note: No CU_BREAK support yet) */
-
-  ret |= CU_GET_ROW;
-  ret |= CU_SYNCERR;
-
- }
-
- return ret;
+ return 0U;
 }
 
 
@@ -1049,27 +550,6 @@ auint cu_avr_getcycle(void)
  return cpu_state.cycle;
 }
 
-
-
-/*
-** Return current row. Note that continuing emulation will modify the returned
-** structure's contents.
-*/
-cu_row_t const* cu_avr_get_row(void)
-{
- return &video_row;
-}
-
-
-
-/*
-** Return frame info. Note that continuing emulation will modify the returned
-** structure's contents.
-*/
-cu_frameinfo_t const* cu_avr_get_frameinfo(void)
-{
- return &video_frame;
-}
 
 
 /*
@@ -1092,20 +572,6 @@ uint8* cu_avr_get_ioinfo(void)
 {
  return &access_io[0];
 }
-
-
-/*
-** Returns whether the EEPROM changed since the last clear of this indicator.
-** Calling cu_avr_io_update() clears this indicator (as well as resetting by
-** cu_avr_reset()). Passing TRUE also clears it.
-*/
-boole cu_avr_eeprom_ischanged(boole clear)
-{
- boole ret = eeprom_changed;
- if (clear){ eeprom_changed = FALSE; }
- return ret;
-}
-
 
 
 /*
@@ -1174,25 +640,10 @@ void  cu_avr_io_update(void)
 {
  auint t0;
 
- eeprom_changed = FALSE;
-
  t0    = (cpu_state.iors[CU_IO_TCNT1H] << 8) |
          (cpu_state.iors[CU_IO_TCNT1L]     );
  timer1_base = WRAP32(cpu_state.cycle - t0);
 
  cycle_next_event = WRAP32(cpu_state.cycle + 1U); /* Request HW processing */
  event_it         = TRUE; /* Request interrupt processing */
-}
-
-
-
-/*
-** Returns last measured interval between WDR calls. Returns begin and end
-** (word) addresses of WDR instructions into beg and end.
-*/
-auint cu_avr_get_lastwdrinterval(auint* beg, auint* end)
-{
- *beg = wd_interval_beg[1];
- *end = wd_interval_end[1];
- return wd_interval_min[1];
 }

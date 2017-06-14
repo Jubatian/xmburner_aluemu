@@ -59,20 +59,6 @@ auint cu_avr_getcycle(void);
 
 
 /*
-** Return current row. Note that continuing emulation will modify the returned
-** structure's contents.
-*/
-cu_row_t const* cu_avr_get_row(void);
-
-
-/*
-** Return frame info. Note that continuing emulation will modify the returned
-** structure's contents.
-*/
-cu_frameinfo_t const* cu_avr_get_frameinfo(void);
-
-
-/*
 ** Returns memory access info block. It can be written (with zeros) to clear
 ** flags which are only set by the emulator. Note that the highest 256 bytes
 ** of the RAM come first here! (so address 0x0100 corresponds to AVR address
@@ -87,14 +73,6 @@ uint8* cu_avr_get_meminfo(void);
 ** accesses, only those explicitly performed by read or write operations.
 */
 uint8* cu_avr_get_ioinfo(void);
-
-
-/*
-** Returns whether the EEPROM changed since the last clear of this indicator.
-** Calling cu_avr_io_update() clears this indicator (as well as resetting by
-** cu_avr_reset()). Passing TRUE also clears it.
-*/
-boole cu_avr_eeprom_ischanged(boole clear);
 
 
 /*
@@ -129,13 +107,6 @@ void  cu_avr_crom_update(auint base, auint len);
 ** variables in the structure (such as the watchdog timer).
 */
 void  cu_avr_io_update(void);
-
-
-/*
-** Returns last measured interval between WDR calls. Returns begin and end
-** (word) addresses of WDR instructions into beg and end.
-*/
-auint cu_avr_get_lastwdrinterval(auint* beg, auint* end);
 
 
 #endif
