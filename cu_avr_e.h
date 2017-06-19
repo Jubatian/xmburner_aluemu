@@ -46,6 +46,31 @@ typedef void(avr_opcode)(auint arg1, auint arg2);
 
 
 
+/* Reading IO registers modified with stuck bits */
+static auint op_io_read_mod(auint reg)
+{
+ auint ret = cpu_state.iors[reg];
+ if (alu_ismod){
+  ret &= stuck_0_io[reg];
+  ret |= stuck_0_io[reg];
+ }
+ return ret;
+}
+
+
+/* Reading memory modified with stuck bits */
+static auint op_mem_read_mod(auint off)
+{
+ auint ret = cpu_state.sram[off];
+ if (alu_ismod){
+  ret &= stuck_0_mem[off];
+  ret |= stuck_0_mem[off];
+ }
+ return ret;
+}
+
+
+
 /* Trailing cycles */
 
 #define cy0_tail() \
@@ -92,7 +117,7 @@ typedef void(avr_opcode)(auint arg1, auint arg2);
 #define mul_tail() \
  do{ \
   auint res   = dst * src; \
-  auint flags = cpu_state.iors[CU_IO_SREG]; \
+  auint flags = op_io_read_mod(CU_IO_SREG); \
   PROCFLAGS_MUL(flags, res); \
   mul_tail_fmul(); \
  }while(0)
@@ -100,16 +125,16 @@ typedef void(avr_opcode)(auint arg1, auint arg2);
 #define fmul_tail() \
  do{ \
   auint res   = (dst * src) << 1; \
-  auint flags = cpu_state.iors[CU_IO_SREG]; \
+  auint flags = op_io_read_mod(CU_IO_SREG); \
   PROCFLAGS_FMUL(flags, res); \
   mul_tail_fmul(); \
  }while(0)
 
 #define add_tail() \
  do{ \
-  auint dst   = cpu_state.iors[arg1]; \
+  auint dst   = op_io_read_mod(arg1); \
   auint res; \
-  src  += cpu_state.iors[arg2]; \
+  src  += op_io_read_mod(arg2); \
   res   = dst + src; \
   cpu_state.iors[arg1] = res; \
   cpu_state.iors[CU_IO_SREG] = (flags & (SREG_IM | SREG_TM)) | \
@@ -119,11 +144,11 @@ typedef void(avr_opcode)(auint arg1, auint arg2);
 
 #define sbc_tail() \
  do{ \
-  auint flags = cpu_state.iors[CU_IO_SREG]; \
+  auint flags = op_io_read_mod(CU_IO_SREG); \
   auint dst; \
   auint res; \
   src  += SREG_GET_C(flags); \
-  dst   = cpu_state.iors[arg1]; \
+  dst   = op_io_read_mod(arg1); \
   res   = dst - src; \
   cpu_state.iors[arg1] = res; \
   cpu_state.iors[CU_IO_SREG] = (flags | (SREG_NM | SREG_SM | SREG_HM | SREG_VM | SREG_CM)) & \
@@ -134,7 +159,7 @@ typedef void(avr_opcode)(auint arg1, auint arg2);
 #define log_tail() \
  do{ \
   cpu_state.iors[arg1] = res; \
-  cpu_state.iors[CU_IO_SREG] = (cpu_state.iors[CU_IO_SREG] & (SREG_IM | SREG_TM | SREG_HM | SREG_CM)) | \
+  cpu_state.iors[CU_IO_SREG] = (op_io_read_mod(CU_IO_SREG) & (SREG_IM | SREG_TM | SREG_HM | SREG_CM)) | \
                                cpu_pflags[CU_AVRFG_LOG + res]; \
   cy1_tail(); \
  }while(0)
@@ -151,10 +176,10 @@ typedef void(avr_opcode)(auint arg1, auint arg2);
   UPDATE_HARDWARE; \
   UPDATE_HARDWARE_IT; \
   if (tmp >= 0x0100U){ \
-   cpu_state.sram[tmp & 0x0FFFU] = cpu_state.iors[arg1]; \
+   cpu_state.sram[tmp & 0x0FFFU] = op_io_read_mod(arg1); \
    access_mem[tmp & 0x0FFFU] |= CU_MEM_W; \
   }else{ \
-   cu_avr_write_io(tmp, cpu_state.iors[arg1]); \
+   cu_avr_write_io(tmp, op_io_read_mod(arg1)); \
   } \
   cy0_tail(); \
  }while(0)
@@ -163,7 +188,7 @@ typedef void(avr_opcode)(auint arg1, auint arg2);
  do{ \
   UPDATE_HARDWARE; \
   if (tmp >= 0x0100U){ \
-   cpu_state.iors[arg1] = cpu_state.sram[tmp & 0x0FFFU]; \
+   cpu_state.iors[arg1] = op_mem_read_mod(tmp & 0x0FFFU); \
    access_mem[tmp & 0x0FFFU] |= CU_MEM_R; \
   }else{ \
    cpu_state.iors[arg1] = cu_avr_read_io(tmp); \
@@ -173,7 +198,7 @@ typedef void(avr_opcode)(auint arg1, auint arg2);
 
 #define sub_tail() \
  do{ \
-  cpu_state.iors[CU_IO_SREG] = (cpu_state.iors[CU_IO_SREG] & (SREG_IM | SREG_TM)) | \
+  cpu_state.iors[CU_IO_SREG] = (op_io_read_mod(CU_IO_SREG) & (SREG_IM | SREG_TM)) | \
                                cpu_pflags[CU_AVRFG_SUB + (src << 8) + dst]; \
   cy1_tail(); \
  }while(0)
@@ -182,20 +207,20 @@ typedef void(avr_opcode)(auint arg1, auint arg2);
  do{ \
   res  |= (src >> 1); \
   cpu_state.iors[arg1] = res; \
-  cpu_state.iors[CU_IO_SREG] = (cpu_state.iors[CU_IO_SREG] & (SREG_IM | SREG_TM | SREG_HM)) | \
+  cpu_state.iors[CU_IO_SREG] = (op_io_read_mod(CU_IO_SREG) & (SREG_IM | SREG_TM | SREG_HM)) | \
                                cpu_pflags[CU_AVRFG_SHR + ((src & 1U) << 8) + res]; \
   cy1_tail(); \
  }while(0)
 
 #define ret_tail() \
  do{ \
-  auint tmp   = ((auint)(cpu_state.iors[CU_IO_SPL])     ) + \
-                ((auint)(cpu_state.iors[CU_IO_SPH]) << 8); \
+  auint tmp   = ((auint)(op_io_read_mod(CU_IO_SPL))     ) + \
+                ((auint)(op_io_read_mod(CU_IO_SPH)) << 8); \
   tmp ++; \
-  cpu_state.pc  = (auint)(cpu_state.sram[tmp & 0x0FFFU]) << 8; \
+  cpu_state.pc  = (auint)(op_mem_read_mod(tmp & 0x0FFFU)) << 8; \
   access_mem[tmp & 0x0FFFU] |= CU_MEM_R; \
   tmp ++; \
-  cpu_state.pc |= (auint)(cpu_state.sram[tmp & 0x0FFFU]); \
+  cpu_state.pc |= (auint)(op_mem_read_mod(tmp & 0x0FFFU)); \
   access_mem[tmp & 0x0FFFU] |= CU_MEM_R; \
   cpu_state.iors[CU_IO_SPL] = (tmp     ) & 0xFFU; \
   cpu_state.iors[CU_IO_SPH] = (tmp >> 8) & 0xFFU; \
@@ -229,8 +254,8 @@ typedef void(avr_opcode)(auint arg1, auint arg2);
 
 #define call_tail() \
  do{ \
-  auint tmp   = ((auint)(cpu_state.iors[CU_IO_SPL])     ) + \
-                ((auint)(cpu_state.iors[CU_IO_SPH]) << 8); \
+  auint tmp   = ((auint)(op_io_read_mod(CU_IO_SPL))     ) + \
+                ((auint)(op_io_read_mod(CU_IO_SPH)) << 8); \
   cpu_state.sram[tmp & 0x0FFFU] = (cpu_state.pc     ) & 0xFFU; \
   access_mem[tmp & 0x0FFFU] |= CU_MEM_W; \
   tmp --; \
@@ -265,15 +290,15 @@ static void op_00(auint arg1, auint arg2) /* NOP */
 
 static void op_01(auint arg1, auint arg2) /* MOVW */
 {
- cpu_state.iors[arg1 + 0U] = cpu_state.iors[arg2 + 0U];
- cpu_state.iors[arg1 + 1U] = cpu_state.iors[arg2 + 1U];
+ cpu_state.iors[arg1 + 0U] = op_io_read_mod(arg2 + 0U);
+ cpu_state.iors[arg1 + 1U] = op_io_read_mod(arg2 + 1U);
  cy1_tail();
 }
 
 static void op_02(auint arg1, auint arg2) /* MULS */
 {
- auint dst   = cpu_state.iors[arg1];
- auint src   = cpu_state.iors[arg2];
+ auint dst   = op_io_read_mod(arg1);
+ auint src   = op_io_read_mod(arg2);
  dst  -= (dst & 0x80U) << 1; /* Sign extend from 8 bits */
  src  -= (src & 0x80U) << 1; /* Sign extend from 8 bits */
  mul_tail();
@@ -281,23 +306,23 @@ static void op_02(auint arg1, auint arg2) /* MULS */
 
 static void op_03(auint arg1, auint arg2) /* MULSU */
 {
- auint dst   = cpu_state.iors[arg1];
- auint src   = cpu_state.iors[arg2];
+ auint dst   = op_io_read_mod(arg1);
+ auint src   = op_io_read_mod(arg2);
  dst  -= (dst & 0x80U) << 1; /* Sign extend from 8 bits */
  mul_tail();
 }
 
 static void op_04(auint arg1, auint arg2) /* FMUL */
 {
- auint dst   = cpu_state.iors[arg1];
- auint src   = cpu_state.iors[arg2];
+ auint dst   = op_io_read_mod(arg1);
+ auint src   = op_io_read_mod(arg2);
  fmul_tail();
 }
 
 static void op_05(auint arg1, auint arg2) /* FMULS */
 {
- auint dst   = cpu_state.iors[arg1];
- auint src   = cpu_state.iors[arg2];
+ auint dst   = op_io_read_mod(arg1);
+ auint src   = op_io_read_mod(arg2);
  dst  -= (dst & 0x80U) << 1; /* Sign extend from 8 bits */
  src  -= (src & 0x80U) << 1; /* Sign extend from 8 bits */
  fmul_tail();
@@ -305,17 +330,17 @@ static void op_05(auint arg1, auint arg2) /* FMULS */
 
 static void op_06(auint arg1, auint arg2) /* FMULSU */
 {
- auint dst   = cpu_state.iors[arg1];
- auint src   = cpu_state.iors[arg2];
+ auint dst   = op_io_read_mod(arg1);
+ auint src   = op_io_read_mod(arg2);
  dst  -= (dst & 0x80U) << 1; /* Sign extend from 8 bits */
  fmul_tail();
 }
 
 static void op_07(auint arg1, auint arg2) /* CPC */
 {
- auint flags = cpu_state.iors[CU_IO_SREG];
- auint src   = cpu_state.iors[arg2] + SREG_GET_C(flags);
- auint dst   = cpu_state.iors[arg1];
+ auint flags = op_io_read_mod(CU_IO_SREG);
+ auint src   = op_io_read_mod(arg2) + SREG_GET_C(flags);
+ auint dst   = op_io_read_mod(arg1);
  cpu_state.iors[CU_IO_SREG] = (flags | (SREG_NM | SREG_SM | SREG_HM | SREG_VM | SREG_CM)) &
                               (cpu_pflags[CU_AVRFG_SUB + (src << 8) + dst] | (SREG_IM | SREG_TM));
  cy1_tail();
@@ -323,20 +348,20 @@ static void op_07(auint arg1, auint arg2) /* CPC */
 
 static void op_08(auint arg1, auint arg2) /* SBC */
 {
- auint src   = cpu_state.iors[arg2];
+ auint src   = op_io_read_mod(arg2);
  sbc_tail();
 }
 
 static void op_09(auint arg1, auint arg2) /* ADD */
 {
- auint flags = cpu_state.iors[CU_IO_SREG];
+ auint flags = op_io_read_mod(CU_IO_SREG);
  auint src   = 0U;
  add_tail();
 }
 
 static void op_0A(auint arg1, auint arg2) /* CPSE */
 {
- if (cpu_state.iors[arg1] != cpu_state.iors[arg2]){
+ if (op_io_read_mod(arg1) != op_io_read_mod(arg2)){
   cy1_tail();
  }else{
   skip_tail();
@@ -345,15 +370,15 @@ static void op_0A(auint arg1, auint arg2) /* CPSE */
 
 static void op_0B(auint arg1, auint arg2) /* CP */
 {
- auint dst   = cpu_state.iors[arg1];
- auint src   = cpu_state.iors[arg2];
+ auint dst   = op_io_read_mod(arg1);
+ auint src   = op_io_read_mod(arg2);
  sub_tail();
 }
 
 static void op_0C(auint arg1, auint arg2) /* SUB */
 {
- auint dst   = cpu_state.iors[arg1];
- auint src   = cpu_state.iors[arg2];
+ auint dst   = op_io_read_mod(arg1);
+ auint src   = op_io_read_mod(arg2);
  auint res   = dst - src;
  cpu_state.iors[arg1] = res;
  sub_tail();
@@ -361,32 +386,32 @@ static void op_0C(auint arg1, auint arg2) /* SUB */
 
 static void op_0D(auint arg1, auint arg2) /* ADC */
 {
- auint flags = cpu_state.iors[CU_IO_SREG];
+ auint flags = op_io_read_mod(CU_IO_SREG);
  auint src   = SREG_GET_C(flags);
  add_tail();
 }
 
 static void op_0E(auint arg1, auint arg2) /* AND */
 {
- auint res   = cpu_state.iors[arg1] & cpu_state.iors[arg2];
+ auint res   = op_io_read_mod(arg1) & op_io_read_mod(arg2);
  log_tail();
 }
 
 static void op_0F(auint arg1, auint arg2) /* EOR */
 {
- auint res   = cpu_state.iors[arg1] ^ cpu_state.iors[arg2];
+ auint res   = op_io_read_mod(arg1) ^ op_io_read_mod(arg2);
  log_tail();
 }
 
 static void op_10(auint arg1, auint arg2) /* OR */
 {
- auint res   = cpu_state.iors[arg1] | cpu_state.iors[arg2];
+ auint res   = op_io_read_mod(arg1) | op_io_read_mod(arg2);
  log_tail();
 }
 
 static void op_11(auint arg1, auint arg2) /* MOV */
 {
- cpu_state.iors[arg1] = cpu_state.iors[arg2];
+ cpu_state.iors[arg1] = op_io_read_mod(arg2);
  cy1_tail();
 }
 
@@ -405,7 +430,7 @@ static void op_13(auint arg1, auint arg2) /* SBCI */
 
 static void op_14(auint arg1, auint arg2) /* SUBI */
 {
- auint dst   = cpu_state.iors[arg1];
+ auint dst   = op_io_read_mod(arg1);
  auint src   = arg2;
  auint res   = dst - src;
  cpu_state.iors[arg1] = res;
@@ -414,13 +439,13 @@ static void op_14(auint arg1, auint arg2) /* SUBI */
 
 static void op_15(auint arg1, auint arg2) /* ORI */
 {
- auint res   = cpu_state.iors[arg1] | arg2;
+ auint res   = op_io_read_mod(arg1) | arg2;
  log_tail();
 }
 
 static void op_16(auint arg1, auint arg2) /* ANDI */
 {
- auint res   = cpu_state.iors[arg1] & arg2;
+ auint res   = op_io_read_mod(arg1) & arg2;
  log_tail();
 }
 
@@ -431,16 +456,16 @@ static void op_17(auint arg1, auint arg2) /* SPM */
 
 static void op_18(auint arg1, auint arg2) /* LPM */
 {
- auint tmp = ((auint)(cpu_state.iors[30])     ) +
-             ((auint)(cpu_state.iors[31]) << 8);
+ auint tmp = ((auint)(op_io_read_mod(30))     ) +
+             ((auint)(op_io_read_mod(31)) << 8);
  cpu_state.iors[arg1] = cpu_state.crom[tmp];
  cy3_tail();
 }
 
 static void op_19(auint arg1, auint arg2) /* LPM (+) */
 {
- auint tmp = ((auint)(cpu_state.iors[30])     ) +
-             ((auint)(cpu_state.iors[31]) << 8);
+ auint tmp = ((auint)(op_io_read_mod(30))     ) +
+             ((auint)(op_io_read_mod(31)) << 8);
  cpu_state.iors[arg1] = cpu_state.crom[tmp];
  tmp ++;
  cpu_state.iors[30] = (tmp     ) & 0xFFU;
@@ -450,8 +475,8 @@ static void op_19(auint arg1, auint arg2) /* LPM (+) */
 
 static void op_1A(auint arg1, auint arg2) /* PUSH */
 {
- auint tmp = ((auint)(cpu_state.iors[CU_IO_SPL])     ) +
-             ((auint)(cpu_state.iors[CU_IO_SPH]) << 8);
+ auint tmp = ((auint)(op_io_read_mod(CU_IO_SPL))     ) +
+             ((auint)(op_io_read_mod(CU_IO_SPH)) << 8);
  cpu_state.sram[tmp & 0x0FFFU] = cpu_state.iors[arg1];
  access_mem[tmp & 0x0FFFU] |= CU_MEM_W;
  tmp --;
@@ -460,10 +485,10 @@ static void op_1A(auint arg1, auint arg2) /* PUSH */
 
 static void op_1B(auint arg1, auint arg2) /* POP */
 {
- auint tmp = ((auint)(cpu_state.iors[CU_IO_SPL])     ) +
-             ((auint)(cpu_state.iors[CU_IO_SPH]) << 8);
+ auint tmp = ((auint)(op_io_read_mod(CU_IO_SPL))     ) +
+             ((auint)(op_io_read_mod(CU_IO_SPH)) << 8);
  tmp ++;
- cpu_state.iors[arg1] = cpu_state.sram[tmp & 0x0FFFU];
+ cpu_state.iors[arg1] = op_mem_read_mod(tmp & 0x0FFFU);
  access_mem[tmp & 0x0FFFU] |= CU_MEM_R;
  stk_tail();
 }
@@ -477,16 +502,16 @@ static void op_1C(auint arg1, auint arg2) /* STS */
 
 static void op_1D(auint arg1, auint arg2) /* ST */
 {
- auint tmp = ( ((auint)(cpu_state.iors[(arg2 & 0xFFU) + 0U])     ) +
-               ((auint)(cpu_state.iors[(arg2 & 0xFFU) + 1U]) << 8) +
+ auint tmp = ( ((auint)(op_io_read_mod((arg2 & 0xFFU) + 0U))     ) +
+               ((auint)(op_io_read_mod((arg2 & 0xFFU) + 1U)) << 8) +
                (arg2 >> 8) ) & 0xFFFFU; /* Mask: Just in case someone is tricky accessing IO */
  st_tail();
 }
 
 static void op_1E(auint arg1, auint arg2) /* ST (-) */
 {
- auint tmp = ((auint)(cpu_state.iors[arg2 + 0U])     ) +
-             ((auint)(cpu_state.iors[arg2 + 1U]) << 8);
+ auint tmp = ((auint)(op_io_read_mod(arg2 + 0U))     ) +
+             ((auint)(op_io_read_mod(arg2 + 1U)) << 8);
  tmp --;
  cpu_state.iors[arg2 + 0U] = (tmp     ) & 0xFFU;
  cpu_state.iors[arg2 + 1U] = (tmp >> 8) & 0xFFU;
@@ -495,8 +520,8 @@ static void op_1E(auint arg1, auint arg2) /* ST (-) */
 
 static void op_1F(auint arg1, auint arg2) /* ST (+) */
 {
- auint tmp = ((auint)(cpu_state.iors[arg2 + 0U])     ) +
-             ((auint)(cpu_state.iors[arg2 + 1U]) << 8);
+ auint tmp = ((auint)(op_io_read_mod(arg2 + 0U))     ) +
+             ((auint)(op_io_read_mod(arg2 + 1U)) << 8);
  tmp ++;
  cpu_state.iors[arg2 + 0U] = (tmp     ) & 0xFFU;
  cpu_state.iors[arg2 + 1U] = (tmp >> 8) & 0xFFU;
@@ -513,16 +538,16 @@ static void op_20(auint arg1, auint arg2) /* LDS */
 
 static void op_21(auint arg1, auint arg2) /* LD */
 {
- auint tmp = ( ((auint)(cpu_state.iors[(arg2 & 0xFFU) + 0U])     ) +
-               ((auint)(cpu_state.iors[(arg2 & 0xFFU) + 1U]) << 8) +
+ auint tmp = ( ((auint)(op_io_read_mod((arg2 & 0xFFU) + 0U))     ) +
+               ((auint)(op_io_read_mod((arg2 & 0xFFU) + 1U)) << 8) +
                (arg2 >> 8) ) & 0xFFFFU; /* Mask: Just in case someone is tricky accessing IO */
  ld_tail();
 }
 
 static void op_22(auint arg1, auint arg2) /* LD (-) */
 {
- auint tmp = ((auint)(cpu_state.iors[arg2 + 0U])     ) +
-             ((auint)(cpu_state.iors[arg2 + 1U]) << 8);
+ auint tmp = ((auint)(op_io_read_mod(arg2 + 0U))     ) +
+             ((auint)(op_io_read_mod(arg2 + 1U)) << 8);
  tmp --;
  cpu_state.iors[arg2 + 0U] = (tmp     ) & 0xFFU;
  cpu_state.iors[arg2 + 1U] = (tmp >> 8) & 0xFFU;
@@ -531,8 +556,8 @@ static void op_22(auint arg1, auint arg2) /* LD (-) */
 
 static void op_23(auint arg1, auint arg2) /* LD (+) */
 {
- auint tmp = ((auint)(cpu_state.iors[arg2 + 0U])     ) +
-             ((auint)(cpu_state.iors[arg2 + 1U]) << 8);
+ auint tmp = ((auint)(op_io_read_mod(arg2 + 0U))     ) +
+             ((auint)(op_io_read_mod(arg2 + 1U)) << 8);
  tmp ++;
  cpu_state.iors[arg2 + 0U] = (tmp     ) & 0xFFU;
  cpu_state.iors[arg2 + 1U] = (tmp >> 8) & 0xFFU;
@@ -542,9 +567,9 @@ static void op_23(auint arg1, auint arg2) /* LD (+) */
 
 static void op_24(auint arg1, auint arg2) /* COM */
 {
- auint res   = cpu_state.iors[arg1] ^ 0xFFU;
+ auint res   = op_io_read_mod(arg1) ^ 0xFFU;
  cpu_state.iors[arg1] = res;
- cpu_state.iors[CU_IO_SREG] = (cpu_state.iors[CU_IO_SREG] & (SREG_IM | SREG_TM | SREG_HM)) |
+ cpu_state.iors[CU_IO_SREG] = (op_io_read_mod(CU_IO_SREG) & (SREG_IM | SREG_TM | SREG_HM)) |
                               (cpu_pflags[CU_AVRFG_LOG + res] | SREG_CM);
  cy1_tail();
 }
@@ -552,7 +577,7 @@ static void op_24(auint arg1, auint arg2) /* COM */
 static void op_25(auint arg1, auint arg2) /* NEG */
 {
  auint dst   = 0x00U;
- auint src   = cpu_state.iors[arg1];
+ auint src   = op_io_read_mod(arg1);
  auint res   = dst - src;
  cpu_state.iors[arg1] = res;
  sub_tail();
@@ -560,49 +585,49 @@ static void op_25(auint arg1, auint arg2) /* NEG */
 
 static void op_26(auint arg1, auint arg2) /* SWAP */
 {
- auint res   = cpu_state.iors[arg1];
+ auint res   = op_io_read_mod(arg1);
  cpu_state.iors[arg1] = (res >> 4) | (res << 4);
  cy1_tail();
 }
 
 static void op_27(auint arg1, auint arg2) /* INC */
 {
- auint res   = cpu_state.iors[arg1];
+ auint res   = op_io_read_mod(arg1);
  res ++;
  cpu_state.iors[arg1] = res;
- cpu_state.iors[CU_IO_SREG] = (cpu_state.iors[CU_IO_SREG] & (SREG_IM | SREG_TM | SREG_HM | SREG_CM)) |
+ cpu_state.iors[CU_IO_SREG] = (op_io_read_mod(CU_IO_SREG) & (SREG_IM | SREG_TM | SREG_HM | SREG_CM)) |
                               cpu_pflags[CU_AVRFG_INC + (res & 0xFFU)];
  cy1_tail();
 }
 
 static void op_28(auint arg1, auint arg2) /* ASR */
 {
- auint src   = cpu_state.iors[arg1];
+ auint src   = op_io_read_mod(arg1);
  auint res   = (src & 0x80U);
  shr_tail();
 }
 
 static void op_29(auint arg1, auint arg2) /* LSR */
 {
- auint src   = cpu_state.iors[arg1];
+ auint src   = op_io_read_mod(arg1);
  auint res   = 0U;
  shr_tail();
 }
 
 static void op_2A(auint arg1, auint arg2) /* ROR */
 {
- auint flags = cpu_state.iors[CU_IO_SREG];
- auint src   = cpu_state.iors[arg1];
+ auint flags = op_io_read_mod(CU_IO_SREG);
+ auint src   = op_io_read_mod(arg1);
  auint res   = (SREG_GET_C(flags) << 7);
  shr_tail();
 }
 
 static void op_2B(auint arg1, auint arg2) /* DEC */
 {
- auint res   = cpu_state.iors[arg1];
+ auint res   = op_io_read_mod(arg1);
  res --;
  cpu_state.iors[arg1] = res;
- cpu_state.iors[CU_IO_SREG] = (cpu_state.iors[CU_IO_SREG] & (SREG_IM | SREG_TM | SREG_HM | SREG_CM)) |
+ cpu_state.iors[CU_IO_SREG] = (op_io_read_mod(CU_IO_SREG) & (SREG_IM | SREG_TM | SREG_HM | SREG_CM)) |
                               cpu_pflags[CU_AVRFG_DEC + (res & 0xFFU)];
  cy1_tail();
 }
@@ -623,7 +648,7 @@ static void op_2D(auint arg1, auint arg2) /* CALL */
 
 static void op_2E(auint arg1, auint arg2) /* BSET */
 {
- auint flags = cpu_state.iors[CU_IO_SREG];
+ auint flags = op_io_read_mod(CU_IO_SREG);
  cpu_state.iors[CU_IO_SREG] |=  arg1;
  if ((((~flags) & arg1) & SREG_IM) != 0U){
   event_it = TRUE; /* Interrupts become enabled, so check them */
@@ -639,8 +664,8 @@ static void op_2F(auint arg1, auint arg2) /* BCLR */
 
 static void op_30(auint arg1, auint arg2) /* IJMP */
 {
- auint tmp   = ((auint)(cpu_state.iors[30])     ) +
-               ((auint)(cpu_state.iors[31]) << 8);
+ auint tmp   = ((auint)(op_io_read_mod(30))     ) +
+               ((auint)(op_io_read_mod(31)) << 8);
  cpu_state.pc = tmp;
  cy2_tail();
 }
@@ -652,14 +677,14 @@ static void op_31(auint arg1, auint arg2) /* RET */
 
 static void op_32(auint arg1, auint arg2) /* ICALL */
 {
- auint res   = ((auint)(cpu_state.iors[30])     ) +
-               ((auint)(cpu_state.iors[31]) << 8);
+ auint res   = ((auint)(op_io_read_mod(30))     ) +
+               ((auint)(op_io_read_mod(31)) << 8);
  call_tail();
 }
 
 static void op_33(auint arg1, auint arg2) /* RETI */
 {
- auint flags = cpu_state.iors[CU_IO_SREG];
+ auint flags = op_io_read_mod(CU_IO_SREG);
  SREG_SET(flags, SREG_IM);
  event_it = TRUE; /* Interrupts (might) become enabled, so check them */
  cpu_state.iors[CU_IO_SREG] = flags;
@@ -685,8 +710,8 @@ static void op_36(auint arg1, auint arg2) /* WDR */
 
 static void op_37(auint arg1, auint arg2) /* MUL */
 {
- auint dst   = cpu_state.iors[arg1];
- auint src   = cpu_state.iors[arg2];
+ auint dst   = op_io_read_mod(arg1);
+ auint src   = op_io_read_mod(arg2);
  mul_tail();
 }
 
@@ -698,15 +723,15 @@ static void op_38(auint arg1, auint arg2) /* IN */
 
 static void op_39(auint arg1, auint arg2) /* OUT */
 {
- auint tmp = cpu_state.iors[arg2];
+ auint tmp = op_io_read_mod(arg2);
  out_tail();
 }
 
 static void op_3A(auint arg1, auint arg2) /* ADIW */
 {
- auint flags = cpu_state.iors[CU_IO_SREG];
- auint dst   = ((auint)(cpu_state.iors[arg1 + 0U])     ) +
-               ((auint)(cpu_state.iors[arg1 + 1U]) << 8);
+ auint flags = op_io_read_mod(CU_IO_SREG);
+ auint dst   = ((auint)(op_io_read_mod(arg1 + 0U))     ) +
+               ((auint)(op_io_read_mod(arg1 + 1U)) << 8);
  auint src   = arg2; /* Flags are simplified assuming this is less than 0x8000 (it is so on AVR) */
  auint res   = dst + src;
  SREG_CLR(flags, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
@@ -716,9 +741,9 @@ static void op_3A(auint arg1, auint arg2) /* ADIW */
 
 static void op_3B(auint arg1, auint arg2) /* SBIW */
 {
- auint flags = cpu_state.iors[CU_IO_SREG];
- auint dst   = ((auint)(cpu_state.iors[arg1 + 0U])     ) +
-               ((auint)(cpu_state.iors[arg1 + 1U]) << 8);
+ auint flags = op_io_read_mod(CU_IO_SREG);
+ auint dst   = ((auint)(op_io_read_mod(arg1 + 0U))     ) +
+               ((auint)(op_io_read_mod(arg1 + 1U)) << 8);
  auint src   = arg2; /* Flags are simplified assuming this is less than 0x8000 (it is so on AVR) */
  auint res   = dst - src;
  SREG_CLR(flags, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
@@ -770,7 +795,7 @@ static void op_41(auint arg1, auint arg2) /* RCALL */
 
 static void op_42(auint arg1, auint arg2) /* BRBS */
 {
- if ((cpu_state.iors[CU_IO_SREG] & arg1) == 0U){
+ if ((op_io_read_mod(CU_IO_SREG) & arg1) == 0U){
   cy1_tail();
  }else{
   cpu_state.pc += arg2;
@@ -780,7 +805,7 @@ static void op_42(auint arg1, auint arg2) /* BRBS */
 
 static void op_43(auint arg1, auint arg2) /* BRBC */
 {
- if ((cpu_state.iors[CU_IO_SREG] & arg1) != 0U){
+ if ((op_io_read_mod(CU_IO_SREG) & arg1) != 0U){
   cy1_tail();
  }else{
   cpu_state.pc += arg2;
@@ -790,8 +815,8 @@ static void op_43(auint arg1, auint arg2) /* BRBC */
 
 static void op_44(auint arg1, auint arg2) /* BLD */
 {
- auint src   = (cpu_state.iors[CU_IO_SREG] >> SREG_T) & 1U;
- auint tmp   = cpu_state.iors[arg1];
+ auint src   = (op_io_read_mod(CU_IO_SREG) >> SREG_T) & 1U;
+ auint tmp   = op_io_read_mod(arg1);
  tmp   = (tmp & (~(1U << arg2))) | (src << arg2);
  cpu_state.iors[arg1] = tmp;
  cy1_tail();
@@ -799,15 +824,15 @@ static void op_44(auint arg1, auint arg2) /* BLD */
 
 static void op_45(auint arg1, auint arg2) /* BST */
 {
- auint flags = cpu_state.iors[CU_IO_SREG] & (~(auint)(SREG_TM));
- flags = flags | (((cpu_state.iors[arg1] >> arg2) & 1U) << SREG_T);
+ auint flags = op_io_read_mod(CU_IO_SREG) & (~(auint)(SREG_TM));
+ flags = flags | (((op_io_read_mod(arg1) >> arg2) & 1U) << SREG_T);
  cpu_state.iors[CU_IO_SREG] = flags;
  cy1_tail();
 }
 
 static void op_46(auint arg1, auint arg2) /* SBRC */
 {
- if ((cpu_state.iors[arg1] & arg2) != 0U){
+ if ((op_io_read_mod(arg1) & arg2) != 0U){
   cy1_tail();
  }else{
   skip_tail();
@@ -816,7 +841,7 @@ static void op_46(auint arg1, auint arg2) /* SBRC */
 
 static void op_47(auint arg1, auint arg2) /* SBRS */
 {
- if ((cpu_state.iors[arg1] & arg2) == 0U){
+ if ((op_io_read_mod(arg1) & arg2) == 0U){
   cy1_tail();
  }else{
   skip_tail();
@@ -833,8 +858,8 @@ static void op_49(auint arg1, auint arg2) /* PIXEL */
 {
  /* Note: Normally should execute after UPDATE_HARDWARE, here it doesn't
  ** matter (just shifts visual output one cycle left) */
- cpu_state.iors[CU_IO_PORTC] = cpu_state.iors[arg2] &
-                               cpu_state.iors[CU_IO_DDRC];
+ cpu_state.iors[CU_IO_PORTC] = op_io_read_mod(arg2) &
+                               op_io_read_mod(CU_IO_DDRC);
  cy1_tail();
 }
 
