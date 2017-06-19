@@ -487,7 +487,7 @@ static void  cu_avr_write_io(auint port, auint val)
 
   case 0xEAU:         /* Reset sequentally accessed ports */
 
-   if (cpu_state.iors[0x09U] == 0xA5U){ /* Port lock inactive */
+   if (cpu_state.iors[0xE9U] == 0xA5U){ /* Port lock inactive */
     for (t0 = 0U; t0 < 0x20U; t0++){
      port_states[t0] = 0U;
     }
@@ -496,7 +496,7 @@ static void  cu_avr_write_io(auint port, auint val)
 
   case 0xEBU:         /* Count of cycles to emulate */
 
-   if (cpu_state.iors[0x09U] == 0xA5U){ /* Port lock inactive */
+   if (cpu_state.iors[0xE9U] == 0xA5U){ /* Port lock inactive */
     switch (port_states[0x0BU]){
      case 0U: port_data[0x0BU][0U] = cval; port_states[0x0BU]++; break;
      case 1U: port_data[0x0BU][1U] = cval; port_states[0x0BU]++; break;
@@ -514,8 +514,31 @@ static void  cu_avr_write_io(auint port, auint val)
 
   case 0xF0U:         /* Behaviour mod. enable */
 
-   if (cpu_state.iors[0x09U] == 0xA5U){ /* Port lock inactive */
+   if (cpu_state.iors[0xE9U] == 0xA5U){ /* Port lock inactive */
     alu_ismod = (cval == 0x5AU);
+   }
+   break;
+
+  case 0xF1U:         /* Register / Memory stuck bits */
+
+   if (cpu_state.iors[0xE9U] == 0xA5U){ /* Port lock inactive */
+    switch (port_states[0x11U]){
+     case 0U: port_data[0x11U][0U] = cval; port_states[0x11U]++; break;
+     case 1U: port_data[0x11U][1U] = cval; port_states[0x11U]++; break;
+     case 2U: port_data[0x11U][2U] = cval; port_states[0x11U]++; break;
+     default:
+      t0 = ((auint)(port_data[0x0BU][2U])     ) |
+           ((auint)(cval)                 << 8);
+      if (t0 < 256U){
+       stuck_1_io[t0] = port_data[0x11U][0U];
+       stuck_0_io[t0] = port_data[0x11U][1U];
+      }else{
+       stuck_1_mem[t0 & 0x0FFFU] = port_data[0x11U][0U];
+       stuck_0_mem[t0 & 0x0FFFU] = port_data[0x11U][1U];
+      }
+      port_states[0x11U] = 0U;
+      break;
+    }
    }
    break;
 
