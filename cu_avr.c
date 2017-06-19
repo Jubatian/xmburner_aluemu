@@ -76,6 +76,38 @@ boole           event_it_enter;
 /* Vector to call when entering interrupt */
 auint           event_it_vect;
 
+/* ALU behaviour modification: Set if enabled. */
+boole           alu_ismod;
+
+/* Maximal number of cycles to emulate. */
+auint           cycle_count_max;
+
+/* Guard port accessed (second access terminates) */
+boole           guard_isacc;
+
+/* Port state machines for 0xE0 - 0xFF */
+auint           port_states[0x20U];
+
+/* Port data for 0xE0 - 0xFF */
+uint8           port_data[0x20U][4U];
+
+/* Stuck bits, AND mask, RAM */
+uint8           stuck_0_mem[4096U];
+
+/* Stuck bits, OR mask, RAM */
+uint8           stuck_1_mem[4096U];
+
+/* Stuck bits, AND mask, IO */
+uint8           stuck_0_io[256U];
+
+/* Stuck bits, OR mask, IO */
+uint8           stuck_1_io[256U];
+
+
+
+/* Initial maximal number of cycles */
+#define CYCLE_COUNT_MAX_INI 1000000U
+
 
 
 /* Flags in CU_IO_SREG */
@@ -447,6 +479,46 @@ static void  cu_avr_write_io(auint port, auint val)
                  (cval     ) & 1U);
    break;
 
+  case 0xE8U:         /* Guard port */
+
+   if (guard_isacc){ cycle_count_max = cpu_state.cycle; } /* Terminate program */
+   guard_isacc = TRUE;
+   break;
+
+  case 0xEAU:         /* Reset sequentally accessed ports */
+
+   if (cpu_state.iors[0x09U] == 0xA5U){ /* Port lock inactive */
+    for (t0 = 0U; t0 < 0x20U; t0++){
+     port_states[t0] = 0U;
+    }
+   }
+   break;
+
+  case 0xEBU:         /* Count of cycles to emulate */
+
+   if (cpu_state.iors[0x09U] == 0xA5U){ /* Port lock inactive */
+    switch (port_states[0x0BU]){
+     case 0U: port_data[0x0BU][0U] = cval; port_states[0x0BU]++; break;
+     case 1U: port_data[0x0BU][1U] = cval; port_states[0x0BU]++; break;
+     case 2U: port_data[0x0BU][2U] = cval; port_states[0x0BU]++; break;
+     default:
+      cycle_count_max = ((auint)(port_data[0x0BU][0U])      ) |
+                        ((auint)(port_data[0x0BU][1U]) <<  8) |
+                        ((auint)(port_data[0x0BU][2U]) << 16) |
+                        ((auint)(cval)                 << 24);
+      port_states[0x0BU] = 0U;
+      break;
+    }
+   }
+   break;
+
+  case 0xF0U:         /* Behaviour mod. enable */
+
+   if (cpu_state.iors[0x09U] == 0xA5U){ /* Port lock inactive */
+    alu_ismod = (cval == 0x5AU);
+   }
+   break;
+
   default:
 
    break;
@@ -480,8 +552,18 @@ static auint cu_avr_read_io(auint port)
    ret = cpu_state.latch;
    break;
 
+  case 0xE8U:         /* Guard port */
+
+   if (guard_isacc){ cycle_count_max = cpu_state.cycle; } /* Terminate program */
+   guard_isacc = TRUE;
+   break;
+
   default:
    ret = cpu_state.iors[port];
+   if (alu_ismod){
+    ret &= stuck_0_io[port];
+    ret |= stuck_1_io[port];
+   }
    break;
  }
 
@@ -509,10 +591,14 @@ void  cu_avr_reset(void)
 
  for (i = 0U; i < 4096U; i++){
   access_mem[i] = 0U;
+  stuck_0_mem[i] = 0xFFU;
+  stuck_1_mem[i] = 0x00U;
  }
 
  for (i = 0U; i < 256U; i++){
   access_io[i] = 0U;
+  stuck_0_io[i] = 0xFFU;
+  stuck_1_io[i] = 0x00U;
  }
 
  for (i = 0U; i < 256U; i++){ /* Most I/O regs are reset to zero */
@@ -537,6 +623,13 @@ void  cu_avr_reset(void)
  timer1_base        = cpu_state.cycle;
  event_it           = TRUE;
  event_it_enter     = FALSE;
+ alu_ismod          = FALSE;
+ cycle_count_max    = CYCLE_COUNT_MAX_INI;
+ guard_isacc        = FALSE;
+
+ for (i = 0U; i < 0x20U; i++){
+  port_states[i] = 0U;
+ }
 
  if (!pflags_done){
   cu_avrfg_fill(&cpu_pflags[0]);
@@ -559,7 +652,7 @@ auint cu_avr_run(void)
 {
  auint i;
 
- for (i = 0U; i < 2048U; i++){
+ for (i = 0U; i < cycle_count_max; i++){
   cu_avr_exec();       /* Note: This inlines as only this single call exists */
  }
 
