@@ -111,6 +111,11 @@ the following sequence:
 The memory map accords with the layout of an ATMega644. CPU registers are in
 the 0x0000 - 0x001F range.
 
+Limitations: In RAM the stuck bits are fully emulated. In IO space the
+peripherals and interrupts would keep operating according to the state without
+the forced stuck bits. Stuck bits in CPU registers, Status register and Stack
+as concerned by the ALU are fully emulated.
+
 
 0xF2: ROM stuck or altered bits.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
