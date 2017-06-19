@@ -129,6 +129,10 @@ the following sequence:
 - Byte 3: Address high byte.
 - Byte 4: Must be provided, zero (reserved for larger than 64K address space).
 
+Limitations: Only emulated for LPM instructions. Code execution always happens
+in accordance with the original ROM contents (so this feature is mostly useful
+only for testing various checksum algorithms used to verify the code space).
+
 
 0xF3: Instruction logic flag behaviour anomalies.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

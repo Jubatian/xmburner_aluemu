@@ -103,6 +103,13 @@ uint8           stuck_0_io[256U];
 /* Stuck bits, OR mask, IO */
 uint8           stuck_1_io[256U];
 
+/* Stuck bits, AND mask, ROM */
+uint8           stuck_0_rom[65536U];
+
+/* Stuck bits, OR mask, ROM */
+uint8           stuck_1_rom[65536U];
+
+
 
 
 /* Initial maximal number of cycles */
@@ -542,6 +549,25 @@ static void  cu_avr_write_io(auint port, auint val)
    }
    break;
 
+  case 0xF2U:         /* ROM stuck bits */
+
+   if (cpu_state.iors[0xE9U] == 0xA5U){ /* Port lock inactive */
+    switch (port_states[0x12U]){
+     case 0U: port_data[0x12U][0U] = cval; port_states[0x12U]++; break;
+     case 1U: port_data[0x12U][1U] = cval; port_states[0x12U]++; break;
+     case 2U: port_data[0x12U][2U] = cval; port_states[0x12U]++; break;
+     case 3U: port_data[0x12U][3U] = cval; port_states[0x12U]++; break;
+     default:
+      t0 = ((auint)(port_data[0x0BU][2U])     ) |
+           ((auint)(port_data[0x0BU][3U]) << 8);
+      stuck_1_rom[t0] = port_data[0x12U][0U];
+      stuck_0_rom[t0] = port_data[0x12U][1U];
+      port_states[0x12U] = 0U;
+      break;
+    }
+   }
+   break;
+
   default:
 
    break;
@@ -622,6 +648,11 @@ void  cu_avr_reset(void)
   access_io[i] = 0U;
   stuck_0_io[i] = 0xFFU;
   stuck_1_io[i] = 0x00U;
+ }
+
+ for (i = 0U; i < 65536U; i++){
+  stuck_0_rom[i] = 0xFFU;
+  stuck_1_rom[i] = 0x00U;
  }
 
  for (i = 0U; i < 256U; i++){ /* Most I/O regs are reset to zero */

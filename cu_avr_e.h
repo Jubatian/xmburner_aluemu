@@ -458,7 +458,12 @@ static void op_18(auint arg1, auint arg2) /* LPM */
 {
  auint tmp = ((auint)(op_io_read_mod(30))     ) +
              ((auint)(op_io_read_mod(31)) << 8);
- cpu_state.iors[arg1] = cpu_state.crom[tmp];
+ auint res = cpu_state.crom[tmp];
+ if (alu_ismod){
+  res &= stuck_0_rom[tmp];
+  res |= stuck_1_rom[tmp];
+ }
+ cpu_state.iors[arg1] = res;
  cy3_tail();
 }
 
@@ -466,10 +471,15 @@ static void op_19(auint arg1, auint arg2) /* LPM (+) */
 {
  auint tmp = ((auint)(op_io_read_mod(30))     ) +
              ((auint)(op_io_read_mod(31)) << 8);
- cpu_state.iors[arg1] = cpu_state.crom[tmp];
+ auint res = cpu_state.crom[tmp];
+ if (alu_ismod){
+  res &= stuck_0_rom[tmp];
+  res |= stuck_1_rom[tmp];
+ }
  tmp ++;
  cpu_state.iors[30] = (tmp     ) & 0xFFU;
  cpu_state.iors[31] = (tmp >> 8) & 0xFFU;
+ cpu_state.iors[arg1] = res;
  cy3_tail();
 }
 
