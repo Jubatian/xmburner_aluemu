@@ -519,6 +519,11 @@ static void  cu_avr_write_io(auint port, auint val)
    }
    break;
 
+  case 0xECU:         /* Terminate program */
+
+   cycle_count_max = cpu_state.cycle;
+   break;
+
   case 0xF0U:         /* Behaviour mod. enable */
 
    if (cpu_state.iors[0xE9U] == 0xA5U){ /* Port lock inactive */
@@ -605,6 +610,11 @@ static auint cu_avr_read_io(auint port)
 
    if (guard_isacc){ cycle_count_max = cpu_state.cycle; } /* Terminate program */
    guard_isacc = TRUE;
+   break;
+
+  case 0xECU:         /* Terminate program */
+
+   cycle_count_max = cpu_state.cycle;
    break;
 
   default:

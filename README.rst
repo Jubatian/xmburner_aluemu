@@ -52,7 +52,7 @@ channel:
 
 
 
-Port reset and locks
+Port reset, locks and program termination
 ------------------------------------------------------------------------------
 
 
@@ -63,6 +63,7 @@ process.
 - 0xE8: Guard port. A second access to this terminates the program.
 - 0xE9: Port lock: Having 0xA5 here enables accessing ports beyond this one.
 - 0xEA: Reset sequentially accessed ports.
+- 0xEC: Terminate program.
 
 
 
