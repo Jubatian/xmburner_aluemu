@@ -30,11 +30,15 @@ Calling
 ------------------------------------------------------------------------------
 
 
-The emulator accepts one parameter: the binary to run.
+The emulator accepts one parameter: the binary to run as a .hex file.
 
 If a binary is provided proper, it only produces output on the standard output
 channel according to the code within the binary. This can be used to generate
 test results.
+
+It adds a single new line (an ASCII '\n' character) to the end of the output,
+useful for normal test report generation if the code can not be relied upon to
+finish text lines. This is in main.c should it be necessary to remove it.
 
 
 

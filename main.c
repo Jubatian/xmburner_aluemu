@@ -59,5 +59,7 @@ int main (int argc, char** argv)
 
  filesys_flushall();
 
+ print_unf("\n"); /* New line to terminate any text line produced by running code */
+
  return 0;
 }
