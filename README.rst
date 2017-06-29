@@ -90,12 +90,24 @@ Altering internal behaviour
 
 Internal behaviour of the ALU can be altered by writing to certain ports:
 
-- 0xF0: Behaviour modifications are enabled if this is set 0x5A.
+- 0xF0: Behaviour modifications can be enabled if this is set 0x5A.
 - 0xF1: Register / RAM Memory stuck bits.
 - 0xF2: ROM stuck or altered bits.
 - 0xF3: Instruction related flag behaviour anomalies.
 - 0xF4: Instruction destination anomalies.
 - 0xF5: Addition anomalies.
+
+
+0xF0: Behaviour modifications enable.
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Writing this port to 0x5A enables behaviour modifications, but only after the
+execution of an "ijmp" instruction. Writing the port to any other value than
+0x5A disables all behaviour modifications.
+
+Recommended usage is so calling the function to test with a processor having
+anomalies enabled using an "ijmp" instruction. The "ijmp" then is the last
+instruction executing with the modifications disabled.
 
 
 0xF1: Register / RAM Memory stuck bits.

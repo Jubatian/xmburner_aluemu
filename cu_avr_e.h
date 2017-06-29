@@ -677,6 +677,9 @@ static void op_30(auint arg1, auint arg2) /* IJMP */
  auint tmp   = ((auint)(op_io_read_mod(30))     ) +
                ((auint)(op_io_read_mod(31)) << 8);
  cpu_state.pc = tmp;
+ if (cpu_state.iors[0xF0U] == 0x5AU){ /* Enable behaviour modifications if allowed */
+  alu_ismod = TRUE;
+ }
  cy2_tail();
 }
 

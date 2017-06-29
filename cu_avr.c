@@ -499,6 +499,8 @@ static void  cu_avr_write_io(auint port, auint val)
     for (t0 = 0U; t0 < 0x20U; t0++){
      port_states[t0] = 0U;
     }
+   }else{
+    cval = pval;
    }
    break;
 
@@ -517,6 +519,8 @@ static void  cu_avr_write_io(auint port, auint val)
       port_states[0x0BU] = 0U;
       break;
     }
+   }else{
+    cval = pval;
    }
    break;
 
@@ -528,7 +532,9 @@ static void  cu_avr_write_io(auint port, auint val)
   case 0xF0U:         /* Behaviour mod. enable */
 
    if (cpu_state.iors[0xE9U] == 0xA5U){ /* Port lock inactive */
-    alu_ismod = (cval == 0x5AU);
+    if (cval != 0x5AU){ alu_ismod = FALSE; } /* An "ijmp" will enable it */
+   }else{
+    cval = pval;
    }
    break;
 
@@ -552,6 +558,8 @@ static void  cu_avr_write_io(auint port, auint val)
       port_states[0x11U] = 0U;
       break;
     }
+   }else{
+    cval = pval;
    }
    break;
 
@@ -571,6 +579,8 @@ static void  cu_avr_write_io(auint port, auint val)
       port_states[0x12U] = 0U;
       break;
     }
+   }else{
+    cval = pval;
    }
    break;
 
