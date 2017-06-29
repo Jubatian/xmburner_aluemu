@@ -195,10 +195,6 @@ ex_ok:
 
  filesys_flush(FILESYS_CH_EMU);
 
- /* Print out successful result */
-
- print_message("%sSuccesfully loaded program from %s\n", cu_id, fname);
-
  /* Successful */
 
  return TRUE;

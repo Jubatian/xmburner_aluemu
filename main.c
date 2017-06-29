@@ -53,13 +53,9 @@ int main (int argc, char** argv)
 
  ecpu->wd_seed = rand(); /* Seed the WD timeout used for PRNG seed in Uzebox games */
 
- print_unf("Starting emulator\n");
-
  cu_avr_reset();
 
  cu_avr_run();
-
- print_unf("\nDone\n");
 
  filesys_flushall();
 
