@@ -52,7 +52,7 @@ static auint op_io_read_mod(auint reg)
  auint ret = cpu_state.iors[reg];
  if (alu_ismod){
   ret &= stuck_0_io[reg];
-  ret |= stuck_0_io[reg];
+  ret |= stuck_1_io[reg];
  }
  return ret;
 }
@@ -64,7 +64,7 @@ static auint op_mem_read_mod(auint off)
  auint ret = cpu_state.sram[off];
  if (alu_ismod){
   ret &= stuck_0_mem[off];
-  ret |= stuck_0_mem[off];
+  ret |= stuck_1_mem[off];
  }
  return ret;
 }
