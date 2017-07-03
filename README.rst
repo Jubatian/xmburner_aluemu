@@ -66,7 +66,6 @@ process.
 
 - 0xE7: Terminate program.
 - 0xE8: Guard port. A second access to this terminates the program.
-- 0xE9: Port lock: Having 0xA5 here enables accessing ports beyond this one.
 - 0xEA: Reset sequentially accessed ports.
 
 
@@ -112,6 +111,9 @@ execution of an "ijmp" instruction. Writing the port to any other value than
 Recommended usage is so calling the function to test with a processor having
 anomalies enabled using an "ijmp" instruction. The "ijmp" then is the last
 instruction executing with the modifications disabled.
+
+When behaviour modifications are enabled, all ports in the 0xE9 - 0xFF range
+become unaccessible except for 0xF0 for disabling behaviour modifications.
 
 
 0xF1: Register / RAM Memory stuck bits.

@@ -511,7 +511,7 @@ static void  cu_avr_write_io(auint port, auint val)
 
   case 0xEBU:         /* Count of cycles to emulate */
 
-   if (cpu_state.iors[0xE9U] == 0xA5U){ /* Port lock inactive */
+   if (!alu_ismod){   /* Behaviour mods disabled */
     switch (port_states[0x0BU]){
      case 0U: port_data[0x0BU][0U] = cval; port_states[0x0BU]++; break;
      case 1U: port_data[0x0BU][1U] = cval; port_states[0x0BU]++; break;
@@ -531,16 +531,12 @@ static void  cu_avr_write_io(auint port, auint val)
 
   case 0xF0U:         /* Behaviour mod. enable */
 
-   if (cpu_state.iors[0xE9U] == 0xA5U){ /* Port lock inactive */
-    if (cval != 0x5AU){ alu_ismod = FALSE; } /* An "ijmp" will enable it */
-   }else{
-    cval = pval;
-   }
+   if (cval != 0x5AU){ alu_ismod = FALSE; } /* An "ijmp" will enable it */
    break;
 
   case 0xF1U:         /* Register / Memory stuck bits */
 
-   if (cpu_state.iors[0xE9U] == 0xA5U){ /* Port lock inactive */
+   if (!alu_ismod){   /* Behaviour mods disabled */
     switch (port_states[0x11U]){
      case 0U: port_data[0x11U][0U] = cval; port_states[0x11U]++; break;
      case 1U: port_data[0x11U][1U] = cval; port_states[0x11U]++; break;
@@ -565,7 +561,7 @@ static void  cu_avr_write_io(auint port, auint val)
 
   case 0xF2U:         /* ROM stuck bits */
 
-   if (cpu_state.iors[0xE9U] == 0xA5U){ /* Port lock inactive */
+   if (!alu_ismod){   /* Behaviour mods disabled */
     switch (port_states[0x12U]){
      case 0U: port_data[0x12U][0U] = cval; port_states[0x12U]++; break;
      case 1U: port_data[0x12U][1U] = cval; port_states[0x12U]++; break;
