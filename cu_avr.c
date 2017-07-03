@@ -487,6 +487,11 @@ static void  cu_avr_write_io(auint port, auint val)
                  (cval     ) & 1U);
    break;
 
+  case 0xE7U:         /* Terminate program */
+
+   cycle_count_max = cpu_state.cycle;
+   break;
+
   case 0xE8U:         /* Guard port */
 
    if (guard_isacc){ cycle_count_max = cpu_state.cycle; } /* Terminate program */
@@ -522,11 +527,6 @@ static void  cu_avr_write_io(auint port, auint val)
    }else{
     cval = pval;
    }
-   break;
-
-  case 0xECU:         /* Terminate program */
-
-   cycle_count_max = cpu_state.cycle;
    break;
 
   case 0xF0U:         /* Behaviour mod. enable */
@@ -617,15 +617,15 @@ static auint cu_avr_read_io(auint port)
    ret = cpu_state.latch;
    break;
 
+  case 0xE7U:         /* Terminate program */
+
+   cycle_count_max = cpu_state.cycle;
+   break;
+
   case 0xE8U:         /* Guard port */
 
    if (guard_isacc){ cycle_count_max = cpu_state.cycle; } /* Terminate program */
    guard_isacc = TRUE;
-   break;
-
-  case 0xECU:         /* Terminate program */
-
-   cycle_count_max = cpu_state.cycle;
    break;
 
   default:

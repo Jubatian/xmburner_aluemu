@@ -64,10 +64,10 @@ The emulator's behaviour can be modified from within the running program by
 writing to certain ports. The ports below are used to control the overall
 process.
 
+- 0xE7: Terminate program.
 - 0xE8: Guard port. A second access to this terminates the program.
 - 0xE9: Port lock: Having 0xA5 here enables accessing ports beyond this one.
 - 0xEA: Reset sequentially accessed ports.
-- 0xEC: Terminate program.
 
 
 
