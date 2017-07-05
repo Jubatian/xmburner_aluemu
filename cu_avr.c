@@ -542,7 +542,7 @@ static void  cu_avr_write_io(auint port, auint val)
      case 1U: port_data[0x11U][1U] = cval; port_states[0x11U]++; break;
      case 2U: port_data[0x11U][2U] = cval; port_states[0x11U]++; break;
      default:
-      t0 = ((auint)(port_data[0x0BU][2U])     ) |
+      t0 = ((auint)(port_data[0x11U][2U])     ) |
            ((auint)(cval)                 << 8);
       if (t0 < 256U){
        stuck_1_io[t0] = port_data[0x11U][0U];
@@ -568,8 +568,8 @@ static void  cu_avr_write_io(auint port, auint val)
      case 2U: port_data[0x12U][2U] = cval; port_states[0x12U]++; break;
      case 3U: port_data[0x12U][3U] = cval; port_states[0x12U]++; break;
      default:
-      t0 = ((auint)(port_data[0x0BU][2U])     ) |
-           ((auint)(port_data[0x0BU][3U]) << 8);
+      t0 = ((auint)(port_data[0x12U][2U])     ) |
+           ((auint)(port_data[0x12U][3U]) << 8);
       stuck_1_rom[t0] = port_data[0x12U][0U];
       stuck_0_rom[t0] = port_data[0x12U][1U];
       port_states[0x12U] = 0U;
