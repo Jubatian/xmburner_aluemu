@@ -109,6 +109,12 @@ uint8           stuck_0_rom[65536U];
 /* Stuck bits, OR mask, ROM */
 uint8           stuck_1_rom[65536U];
 
+/* Skip mask */
+auint           skip_mask;
+
+/* Skip compare value */
+auint           skip_comp;
+
 
 
 
@@ -580,6 +586,26 @@ static void  cu_avr_write_io(auint port, auint val)
    }
    break;
 
+  case 0xF6U:         /* Instruction skipping */
+
+   if (!alu_ismod){   /* Behaviour mods disabled */
+    switch (port_states[0x16U]){
+     case 0U: port_data[0x16U][0U] = cval; port_states[0x16U]++; break;
+     case 1U: port_data[0x16U][1U] = cval; port_states[0x16U]++; break;
+     case 2U: port_data[0x16U][2U] = cval; port_states[0x16U]++; break;
+     default:
+      skip_mask = ((auint)(port_data[0x16U][0U])     ) |
+                  ((auint)(port_data[0x16U][1U]) << 8);
+      skip_comp = ((auint)(port_data[0x16U][2U])     ) |
+                  ((auint)(cval)                 << 8);
+      port_states[0x16U] = 0U;
+      break;
+    }
+   }else{
+    cval = pval;
+   }
+   break;
+
   default:
 
    break;
@@ -697,6 +723,8 @@ void  cu_avr_reset(void)
  alu_ismod          = FALSE;
  cycle_count_max    = CYCLE_COUNT_MAX_INI;
  guard_isacc        = FALSE;
+ skip_mask          = 0U;
+ skip_comp          = 0U;
 
  for (i = 0U; i < 0x20U; i++){
   port_states[i] = 0U;

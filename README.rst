@@ -99,6 +99,7 @@ Internal behaviour of the ALU can be altered by writing to certain ports:
 - 0xF3: Instruction related flag behaviour anomalies.
 - 0xF4: Instruction destination anomalies.
 - 0xF5: Addition anomalies.
+- 0xF6: Instruction skipping.
 
 
 0xF0: Behaviour modifications enable.
@@ -156,6 +157,8 @@ only for testing various checksum algorithms used to verify the code space).
 0xF3: Instruction logic flag behaviour anomalies.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+(Not implemented yet)
+
 Flags can be made stuck cleared or set for certain instruction. Upon the
 execution of the affected instruction, the flags (SREG) will be modified
 according to the OR and AND masks defined for it.
@@ -170,6 +173,8 @@ The opcode accords with the translated instruction set, see cu_avrc.h.
 0xF4: Instruction destination anomalies.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+(Not implemented yet)
+
 Bits can be made stuck set or cleared in the destination of instructions
 having one. These will be applied after the execution of the instruction.
 
@@ -182,6 +187,8 @@ The opcode accords with the translated instruction set, see cu_avrc.h.
 
 0xF5: Addition anomalies.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+(Not implemented yet)
 
 Instructions having an addition or subtraction component can be affected by
 this feature. This includes post-increments or pre-decrements in loads and
@@ -199,3 +206,22 @@ Carry failure causes the corresponding bit to not receive carry for the
 bit level add / subtract operation.
 
 The opcode accords with the translated instruction set, see cu_avrc.h.
+
+
+0xF6: Instruction skipping
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+An instruction or a group of instructions can be skipped (turning them into
+NOPs) by this feature.
+
+- Byte 0: Skip mask, low
+- Byte 1: Skip mask, high
+- Byte 2: Compare value, low
+- Byte 3: Compare value, high
+
+The feature applies the Skip mask (AND) on the opcode word to process, then
+if the result matches the Compare value, the instruction is executed as a
+NOP.
+
+If the Skip mask is zero, the feature is turned off. By default it is turned
+off.

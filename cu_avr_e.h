@@ -915,6 +915,20 @@ static void cu_avr_exec(void)
  auint arg1   = (opcode >>  8) & 0xFFU;
  auint arg2   = (opcode >> 16) & 0xFFFFU;
 
+ /* Instruction skip feature */
+
+ if (alu_ismod){
+  if (skip_mask != 0U){
+   if ( ( ( ((auint)(cpu_state.crom[((cpu_state.pc & 0x7FFFU) << 1)     ])     ) |
+            ((auint)(cpu_state.crom[((cpu_state.pc & 0x7FFFU) << 1) + 1U]) << 8) ) &
+          skip_mask) == skip_comp){
+    cpu_state.pc ++;
+    op_00(arg1, arg2); /* NOP */
+    return;
+   }
+  }
+ }
+
  /* GDB stuff should be added here later */
 
  cpu_state.pc ++;
