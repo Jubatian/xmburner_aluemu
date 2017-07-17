@@ -361,7 +361,7 @@ static void op_09(auint arg1, auint arg2) /* ADD */
 
 static void op_0A(auint arg1, auint arg2) /* CPSE */
 {
- if (op_io_read_mod(arg1) != op_io_read_mod(arg2)){
+ if ((op_io_read_mod(arg1) != op_io_read_mod(arg2)) && (!cond_jmp)){
   cy1_tail();
  }else{
   skip_tail();
@@ -772,7 +772,7 @@ static void op_3C(auint arg1, auint arg2) /* CBI */
 
 static void op_3D(auint arg1, auint arg2) /* SBIC */
 {
- if ((cu_avr_read_io(arg1) & arg2) != 0U){
+ if (((cu_avr_read_io(arg1) & arg2) != 0U) && (!cond_jmp)){
   cy1_tail();
  }else{
   skip_tail();
@@ -787,7 +787,7 @@ static void op_3E(auint arg1, auint arg2) /* SBI */
 
 static void op_3F(auint arg1, auint arg2) /* SBIS */
 {
- if ((cu_avr_read_io(arg1) & arg2) == 0U){
+ if (((cu_avr_read_io(arg1) & arg2) == 0U) && (!cond_jmp)){
   cy1_tail();
  }else{
   skip_tail();
@@ -808,7 +808,7 @@ static void op_41(auint arg1, auint arg2) /* RCALL */
 
 static void op_42(auint arg1, auint arg2) /* BRBS */
 {
- if ((op_io_read_mod(CU_IO_SREG) & arg1) == 0U){
+ if (((op_io_read_mod(CU_IO_SREG) & arg1) == 0U) && (!cond_jmp)){
   cy1_tail();
  }else{
   cpu_state.pc += arg2;
@@ -818,7 +818,7 @@ static void op_42(auint arg1, auint arg2) /* BRBS */
 
 static void op_43(auint arg1, auint arg2) /* BRBC */
 {
- if ((op_io_read_mod(CU_IO_SREG) & arg1) != 0U){
+ if (((op_io_read_mod(CU_IO_SREG) & arg1) != 0U) && (!cond_jmp)){
   cy1_tail();
  }else{
   cpu_state.pc += arg2;
@@ -845,7 +845,7 @@ static void op_45(auint arg1, auint arg2) /* BST */
 
 static void op_46(auint arg1, auint arg2) /* SBRC */
 {
- if ((op_io_read_mod(arg1) & arg2) != 0U){
+ if (((op_io_read_mod(arg1) & arg2) != 0U) && (!cond_jmp)){
   cy1_tail();
  }else{
   skip_tail();
@@ -854,7 +854,7 @@ static void op_46(auint arg1, auint arg2) /* SBRC */
 
 static void op_47(auint arg1, auint arg2) /* SBRS */
 {
- if ((op_io_read_mod(arg1) & arg2) == 0U){
+ if (((op_io_read_mod(arg1) & arg2) == 0U) && (!cond_jmp)){
   cy1_tail();
  }else{
   skip_tail();
@@ -925,6 +925,19 @@ static void cu_avr_exec(void)
     cpu_state.pc ++;
     op_00(arg1, arg2); /* NOP */
     return;
+   }
+  }
+ }
+
+ /* Condition disable feature */
+
+ cond_jmp = FALSE;
+ if (alu_ismod){
+  if (cond_mask != 0U){
+   if ( ( ( ((auint)(cpu_state.crom[((cpu_state.pc & 0x7FFFU) << 1)     ])     ) |
+            ((auint)(cpu_state.crom[((cpu_state.pc & 0x7FFFU) << 1) + 1U]) << 8) ) &
+          cond_mask) == cond_comp){
+    cond_jmp = TRUE;
    }
   }
  }

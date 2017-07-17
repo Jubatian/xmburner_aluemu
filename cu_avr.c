@@ -115,6 +115,15 @@ auint           skip_mask;
 /* Skip compare value */
 auint           skip_comp;
 
+/* Condition disable mask */
+auint           cond_mask;
+
+/* Condition disable compare value */
+auint           cond_comp;
+
+/* Condition disable: Perform unconditional jump / skip if set */
+boole           cond_jmp;
+
 
 
 
@@ -606,6 +615,26 @@ static void  cu_avr_write_io(auint port, auint val)
    }
    break;
 
+  case 0xF7U:         /* Condition disable */
+
+   if (!alu_ismod){   /* Behaviour mods disabled */
+    switch (port_states[0x17U]){
+     case 0U: port_data[0x17U][0U] = cval; port_states[0x17U]++; break;
+     case 1U: port_data[0x17U][1U] = cval; port_states[0x17U]++; break;
+     case 2U: port_data[0x17U][2U] = cval; port_states[0x17U]++; break;
+     default:
+      cond_mask = ((auint)(port_data[0x17U][0U])     ) |
+                  ((auint)(port_data[0x17U][1U]) << 8);
+      cond_comp = ((auint)(port_data[0x17U][2U])     ) |
+                  ((auint)(cval)                 << 8);
+      port_states[0x17U] = 0U;
+      break;
+    }
+   }else{
+    cval = pval;
+   }
+   break;
+
   default:
 
    break;
@@ -725,6 +754,8 @@ void  cu_avr_reset(void)
  guard_isacc        = FALSE;
  skip_mask          = 0U;
  skip_comp          = 0U;
+ cond_mask          = 0U;
+ cond_comp          = 0U;
 
  for (i = 0U; i < 0x20U; i++){
   port_states[i] = 0U;

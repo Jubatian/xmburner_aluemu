@@ -100,6 +100,7 @@ Internal behaviour of the ALU can be altered by writing to certain ports:
 - 0xF4: Instruction destination anomalies.
 - 0xF5: Addition anomalies.
 - 0xF6: Instruction skipping.
+- 0xF7: Condition disable.
 
 
 0xF0: Behaviour modifications enable.
@@ -225,3 +226,23 @@ NOP.
 
 If the Skip mask is zero, the feature is turned off. By default it is turned
 off.
+
+
+0xF7: Condition disable
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A conditional branch or skip instruction can be made always taken by this
+feature (similar to the instruction skipping feature above).
+
+- Byte 0: Instruction mask, low
+- Byte 1: Instruction mask, high
+- Byte 2: Compare value, low
+- Byte 3: Compare value, high
+
+The feature applies the Instruction mask (AND) on the opcode word to process,
+then if the result matches the Compare value, the branch or skip is always
+taken.
+
+If the Instruction mask is zero, the feature is turned off. By default it is
+turned off.
+
