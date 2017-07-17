@@ -137,6 +137,11 @@ peripherals and interrupts would keep operating according to the state without
 the forced stuck bits. Stuck bits in CPU registers, Status register and Stack
 as concerned by the ALU are fully emulated.
 
+Stuck bits only affects reads, not writes. So by disabling ALU modifications,
+it is possible to reveal the last written value to these locations (this is
+useful if the tested code outputs result data into an area affected by this
+feature).
+
 
 0xF2: ROM stuck or altered bits.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
