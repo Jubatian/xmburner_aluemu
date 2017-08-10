@@ -800,16 +800,13 @@ void  cu_avr_reset(void)
 
 
 /*
-** Run emulation. Returns according to the return values defined in cu_types
-** (emulating up to about 2050 cycles).
+** Run emulation.
 */
 auint cu_avr_run(void)
 {
- auint i;
-
- for (i = 0U; i < cycle_count_max; i++){
+ do{
   cu_avr_exec();       /* Note: This inlines as only this single call exists */
- }
+ }while (cpu_state.cycle < cycle_count_max);
 
  return 0U;
 }
