@@ -124,6 +124,12 @@ auint           cond_comp;
 /* Condition disable: Perform unconditional jump / skip if set */
 boole           cond_jmp;
 
+/* Inc/dec anomalies: Value to match */
+auint           idc_val;
+
+/* Inc/dec anomalies: Affected translated opcode */
+auint           idc_opc;
+
 
 
 
@@ -595,6 +601,24 @@ static void  cu_avr_write_io(auint port, auint val)
    }
    break;
 
+  case 0xF5U:         /* Add / Subtract anomalies */
+
+   if (!alu_ismod){   /* Behaviour mods disabled */
+    switch (port_states[0x15U]){
+     case 0U: port_data[0x15U][0U] = cval; port_states[0x15U]++; break;
+     case 1U: port_data[0x15U][1U] = cval; port_states[0x15U]++; break;
+     default:
+      idc_val = ((auint)(port_data[0x15U][0U])     ) |
+                ((auint)(port_data[0x15U][1U]) << 8);
+      idc_opc  = cval;
+      port_states[0x15U] = 0U;
+      break;
+    }
+   }else{
+    cval = pval;
+   }
+   break;
+
   case 0xF6U:         /* Instruction skipping */
 
    if (!alu_ismod){   /* Behaviour mods disabled */
@@ -756,6 +780,7 @@ void  cu_avr_reset(void)
  skip_comp          = 0U;
  cond_mask          = 0U;
  cond_comp          = 0U;
+ idc_opc            = 0xFFU;
 
  for (i = 0U; i < 0x20U; i++){
   port_states[i] = 0U;

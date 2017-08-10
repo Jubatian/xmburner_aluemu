@@ -191,27 +191,25 @@ having one. These will be applied after the execution of the instruction.
 The opcode accords with the translated instruction set, see cu_avrc.h.
 
 
-0xF5: Addition anomalies.
+0xF5: Increment / decrement anomalies.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-(Not implemented yet)
+Instructions which could be used or have an increment or decrement component
+(such as addition, subtraction, comparison, loads and stores) can be affected
+by this feature (instructions in the add / subtract group only when the source
+operand is one).
 
-Instructions having an addition or subtraction component can be affected by
-this feature. This includes post-increments or pre-decrements in loads and
-stores and relative jumps along with the normal add, subtract and compare
-instructions.
-
-- Byte 0: Add / Subtract failure at bits.
-- Byte 1: Carry failure at bits.
+- Byte 0: Failing value, low byte.
+- Byte 1: Failing value, high byte.
 - Byte 2: Opcode to be affected.
 
-Add / Subtract failure causes the corresponding source bit to not add or
-subtract to the destination.
+If the destination or the value which should be affected by the increment or
+decrement matches the value provided, the increment or decrement is cancelled,
+if any flags would be affected, they wouldn't be modified.
 
-Carry failure causes the corresponding bit to not receive carry for the
-bit level add / subtract operation.
-
-The opcode accords with the translated instruction set, see cu_avrc.h.
+The opcode accords with the translated instruction set, see cu_avrc.h. If the
+opcode is invalid or have no increment / decrement component, then this feature
+will have no effect.
 
 
 0xF6: Instruction skipping

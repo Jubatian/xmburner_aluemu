@@ -70,6 +70,26 @@ static auint op_mem_read_mod(auint off)
 }
 
 
+/* Reading ROM modified with stuck bits */
+static auint op_rom_read_mod(auint off)
+{
+ auint ret = cpu_state.crom[off];
+ if (alu_ismod){
+  ret &= stuck_0_rom[off];
+  ret |= stuck_1_rom[off];
+ }
+ return ret;
+}
+
+
+/* Prepare Source and Destination for an inc/dec anomaly */
+static void op_idc_prep(auint *dst, auint *src)
+{
+ if ( ((*dst) == idc_val) &&
+      ((*src) == 1U) ){ *src = 0U; }
+}
+
+
 
 /* Trailing cycles */
 
@@ -132,9 +152,7 @@ static auint op_mem_read_mod(auint off)
 
 #define add_tail() \
  do{ \
-  auint dst   = op_io_read_mod(arg1); \
   auint res; \
-  src  += op_io_read_mod(arg2); \
   res   = dst + src; \
   cpu_state.iors[arg1] = res; \
   cpu_state.iors[CU_IO_SREG] = (flags & (SREG_IM | SREG_TM)) | \
@@ -144,11 +162,7 @@ static auint op_mem_read_mod(auint off)
 
 #define sbc_tail() \
  do{ \
-  auint flags = op_io_read_mod(CU_IO_SREG); \
-  auint dst; \
   auint res; \
-  src  += SREG_GET_C(flags); \
-  dst   = op_io_read_mod(arg1); \
   res   = dst - src; \
   cpu_state.iors[arg1] = res; \
   cpu_state.iors[CU_IO_SREG] = (flags | (SREG_NM | SREG_SM | SREG_HM | SREG_VM | SREG_CM)) & \
@@ -341,6 +355,7 @@ static void op_07(auint arg1, auint arg2) /* CPC */
  auint flags = op_io_read_mod(CU_IO_SREG);
  auint src   = op_io_read_mod(arg2) + SREG_GET_C(flags);
  auint dst   = op_io_read_mod(arg1);
+ if (alu_ismod && (idc_opc == 0x07U)){ op_idc_prep(&dst, &src); }
  cpu_state.iors[CU_IO_SREG] = (flags | (SREG_NM | SREG_SM | SREG_HM | SREG_VM | SREG_CM)) &
                               (cpu_pflags[CU_AVRFG_SUB + (src << 8) + dst] | (SREG_IM | SREG_TM));
  cy1_tail();
@@ -348,14 +363,19 @@ static void op_07(auint arg1, auint arg2) /* CPC */
 
 static void op_08(auint arg1, auint arg2) /* SBC */
 {
- auint src   = op_io_read_mod(arg2);
+ auint flags = op_io_read_mod(CU_IO_SREG);
+ auint src   = op_io_read_mod(arg2) + SREG_GET_C(flags);
+ auint dst   = op_io_read_mod(arg1);
+ if (alu_ismod && (idc_opc == 0x08U)){ op_idc_prep(&dst, &src); }
  sbc_tail();
 }
 
 static void op_09(auint arg1, auint arg2) /* ADD */
 {
  auint flags = op_io_read_mod(CU_IO_SREG);
- auint src   = 0U;
+ auint src   = op_io_read_mod(arg2);
+ auint dst   = op_io_read_mod(arg1);
+ if (alu_ismod && (idc_opc == 0x09U)){ op_idc_prep(&dst, &src); }
  add_tail();
 }
 
@@ -372,6 +392,7 @@ static void op_0B(auint arg1, auint arg2) /* CP */
 {
  auint dst   = op_io_read_mod(arg1);
  auint src   = op_io_read_mod(arg2);
+ if (alu_ismod && (idc_opc == 0x0BU)){ op_idc_prep(&dst, &src); }
  sub_tail();
 }
 
@@ -379,7 +400,9 @@ static void op_0C(auint arg1, auint arg2) /* SUB */
 {
  auint dst   = op_io_read_mod(arg1);
  auint src   = op_io_read_mod(arg2);
- auint res   = dst - src;
+ auint res;
+ if (alu_ismod && (idc_opc == 0x0CU)){ op_idc_prep(&dst, &src); }
+ res  = dst - src;
  cpu_state.iors[arg1] = res;
  sub_tail();
 }
@@ -387,7 +410,9 @@ static void op_0C(auint arg1, auint arg2) /* SUB */
 static void op_0D(auint arg1, auint arg2) /* ADC */
 {
  auint flags = op_io_read_mod(CU_IO_SREG);
- auint src   = SREG_GET_C(flags);
+ auint src   = op_io_read_mod(arg2) + SREG_GET_C(flags);
+ auint dst   = op_io_read_mod(arg1);
+ if (alu_ismod && (idc_opc == 0x0DU)){ op_idc_prep(&dst, &src); }
  add_tail();
 }
 
@@ -419,12 +444,16 @@ static void op_12(auint arg1, auint arg2) /* CPI */
 {
  auint dst   = cpu_state.iors[arg1];
  auint src   = arg2;
+ if (alu_ismod && (idc_opc == 0x12U)){ op_idc_prep(&dst, &src); }
  sub_tail();
 }
 
 static void op_13(auint arg1, auint arg2) /* SBCI */
 {
- auint src   = arg2;
+ auint flags = op_io_read_mod(CU_IO_SREG);
+ auint src   = arg2 + SREG_GET_C(flags);
+ auint dst   = op_io_read_mod(arg1);
+ if (alu_ismod && (idc_opc == 0x13U)){ op_idc_prep(&dst, &src); }
  sbc_tail();
 }
 
@@ -432,7 +461,9 @@ static void op_14(auint arg1, auint arg2) /* SUBI */
 {
  auint dst   = op_io_read_mod(arg1);
  auint src   = arg2;
- auint res   = dst - src;
+ auint res;
+ if (alu_ismod && (idc_opc == 0x14U)){ op_idc_prep(&dst, &src); }
+ res = dst - src;
  cpu_state.iors[arg1] = res;
  sub_tail();
 }
@@ -458,11 +489,7 @@ static void op_18(auint arg1, auint arg2) /* LPM */
 {
  auint tmp = ((auint)(op_io_read_mod(30))     ) +
              ((auint)(op_io_read_mod(31)) << 8);
- auint res = cpu_state.crom[tmp];
- if (alu_ismod){
-  res &= stuck_0_rom[tmp];
-  res |= stuck_1_rom[tmp];
- }
+ auint res = op_rom_read_mod(tmp);
  cpu_state.iors[arg1] = res;
  cy3_tail();
 }
@@ -471,12 +498,10 @@ static void op_19(auint arg1, auint arg2) /* LPM (+) */
 {
  auint tmp = ((auint)(op_io_read_mod(30))     ) +
              ((auint)(op_io_read_mod(31)) << 8);
- auint res = cpu_state.crom[tmp];
- if (alu_ismod){
-  res &= stuck_0_rom[tmp];
-  res |= stuck_1_rom[tmp];
- }
- tmp ++;
+ auint res = op_rom_read_mod(tmp);
+ auint one = 1U;
+ if (alu_ismod && (idc_opc == 0x19U)){ op_idc_prep(&tmp, &one); }
+ tmp += one;
  cpu_state.iors[30] = (tmp     ) & 0xFFU;
  cpu_state.iors[31] = (tmp >> 8) & 0xFFU;
  cpu_state.iors[arg1] = res;
@@ -487,9 +512,11 @@ static void op_1A(auint arg1, auint arg2) /* PUSH */
 {
  auint tmp = ((auint)(op_io_read_mod(CU_IO_SPL))     ) +
              ((auint)(op_io_read_mod(CU_IO_SPH)) << 8);
+ auint one = 1U;
  cpu_state.sram[tmp & 0x0FFFU] = cpu_state.iors[arg1];
  access_mem[tmp & 0x0FFFU] |= CU_MEM_W;
- tmp --;
+ if (alu_ismod && (idc_opc == 0x1AU)){ op_idc_prep(&tmp, &one); }
+ tmp -= one;
  stk_tail();
 }
 
@@ -497,7 +524,9 @@ static void op_1B(auint arg1, auint arg2) /* POP */
 {
  auint tmp = ((auint)(op_io_read_mod(CU_IO_SPL))     ) +
              ((auint)(op_io_read_mod(CU_IO_SPH)) << 8);
- tmp ++;
+ auint one = 1U;
+ if (alu_ismod && (idc_opc == 0x1BU)){ op_idc_prep(&tmp, &one); }
+ tmp += one;
  cpu_state.iors[arg1] = op_mem_read_mod(tmp & 0x0FFFU);
  access_mem[tmp & 0x0FFFU] |= CU_MEM_R;
  stk_tail();
@@ -522,7 +551,9 @@ static void op_1E(auint arg1, auint arg2) /* ST (-) */
 {
  auint tmp = ((auint)(op_io_read_mod(arg2 + 0U))     ) +
              ((auint)(op_io_read_mod(arg2 + 1U)) << 8);
- tmp --;
+ auint one = 1U;
+ if (alu_ismod && (idc_opc == 0x1EU)){ op_idc_prep(&tmp, &one); }
+ tmp -= one;
  cpu_state.iors[arg2 + 0U] = (tmp     ) & 0xFFU;
  cpu_state.iors[arg2 + 1U] = (tmp >> 8) & 0xFFU;
  st_tail();
@@ -532,10 +563,12 @@ static void op_1F(auint arg1, auint arg2) /* ST (+) */
 {
  auint tmp = ((auint)(op_io_read_mod(arg2 + 0U))     ) +
              ((auint)(op_io_read_mod(arg2 + 1U)) << 8);
- tmp ++;
+ auint one = 1U;
+ if (alu_ismod && (idc_opc == 0x1FU)){ op_idc_prep(&tmp, &one); }
+ tmp += one;
  cpu_state.iors[arg2 + 0U] = (tmp     ) & 0xFFU;
  cpu_state.iors[arg2 + 1U] = (tmp >> 8) & 0xFFU;
- tmp --;
+ tmp -= one;
  st_tail();
 }
 
@@ -558,7 +591,9 @@ static void op_22(auint arg1, auint arg2) /* LD (-) */
 {
  auint tmp = ((auint)(op_io_read_mod(arg2 + 0U))     ) +
              ((auint)(op_io_read_mod(arg2 + 1U)) << 8);
- tmp --;
+ auint one = 1U;
+ if (alu_ismod && (idc_opc == 0x22U)){ op_idc_prep(&tmp, &one); }
+ tmp -= one;
  cpu_state.iors[arg2 + 0U] = (tmp     ) & 0xFFU;
  cpu_state.iors[arg2 + 1U] = (tmp >> 8) & 0xFFU;
  ld_tail();
@@ -568,10 +603,12 @@ static void op_23(auint arg1, auint arg2) /* LD (+) */
 {
  auint tmp = ((auint)(op_io_read_mod(arg2 + 0U))     ) +
              ((auint)(op_io_read_mod(arg2 + 1U)) << 8);
- tmp ++;
+ auint one = 1U;
+ if (alu_ismod && (idc_opc == 0x23U)){ op_idc_prep(&tmp, &one); }
+ tmp += one;
  cpu_state.iors[arg2 + 0U] = (tmp     ) & 0xFFU;
  cpu_state.iors[arg2 + 1U] = (tmp >> 8) & 0xFFU;
- tmp --;
+ tmp -= one;
  ld_tail();
 }
 
@@ -588,7 +625,9 @@ static void op_25(auint arg1, auint arg2) /* NEG */
 {
  auint dst   = 0x00U;
  auint src   = op_io_read_mod(arg1);
- auint res   = dst - src;
+ auint res;
+ if (alu_ismod && (idc_opc == 0x25U)){ op_idc_prep(&dst, &src); }
+ res = dst - src;
  cpu_state.iors[arg1] = res;
  sub_tail();
 }
@@ -603,7 +642,9 @@ static void op_26(auint arg1, auint arg2) /* SWAP */
 static void op_27(auint arg1, auint arg2) /* INC */
 {
  auint res   = op_io_read_mod(arg1);
- res ++;
+ auint one   = 1U;
+ if (alu_ismod && (idc_opc == 0x27U)){ op_idc_prep(&res, &one); }
+ res += one;
  cpu_state.iors[arg1] = res;
  cpu_state.iors[CU_IO_SREG] = (op_io_read_mod(CU_IO_SREG) & (SREG_IM | SREG_TM | SREG_HM | SREG_CM)) |
                               cpu_pflags[CU_AVRFG_INC + (res & 0xFFU)];
@@ -635,7 +676,9 @@ static void op_2A(auint arg1, auint arg2) /* ROR */
 static void op_2B(auint arg1, auint arg2) /* DEC */
 {
  auint res   = op_io_read_mod(arg1);
- res --;
+ auint one   = 1U;
+ if (alu_ismod && (idc_opc == 0x2BU)){ op_idc_prep(&res, &one); }
+ res -= one;
  cpu_state.iors[arg1] = res;
  cpu_state.iors[CU_IO_SREG] = (op_io_read_mod(CU_IO_SREG) & (SREG_IM | SREG_TM | SREG_HM | SREG_CM)) |
                               cpu_pflags[CU_AVRFG_DEC + (res & 0xFFU)];
@@ -746,7 +789,9 @@ static void op_3A(auint arg1, auint arg2) /* ADIW */
  auint dst   = ((auint)(op_io_read_mod(arg1 + 0U))     ) +
                ((auint)(op_io_read_mod(arg1 + 1U)) << 8);
  auint src   = arg2; /* Flags are simplified assuming this is less than 0x8000 (it is so on AVR) */
- auint res   = dst + src;
+ auint res;
+ if (alu_ismod && (idc_opc == 0x3AU)){ op_idc_prep(&dst, &src); }
+ res = dst + src;
  SREG_CLR(flags, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
  SREG_SET(flags, SREG_VM & (((~dst) & (res)) >> (15U - SREG_V)));
  adiw_tail();
@@ -758,7 +803,9 @@ static void op_3B(auint arg1, auint arg2) /* SBIW */
  auint dst   = ((auint)(op_io_read_mod(arg1 + 0U))     ) +
                ((auint)(op_io_read_mod(arg1 + 1U)) << 8);
  auint src   = arg2; /* Flags are simplified assuming this is less than 0x8000 (it is so on AVR) */
- auint res   = dst - src;
+ auint res;
+ if (alu_ismod && (idc_opc == 0x3BU)){ op_idc_prep(&dst, &src); }
+ res = dst - src;
  SREG_CLR(flags, SREG_CM | SREG_ZM | SREG_NM | SREG_VM | SREG_SM);
  SREG_SET(flags, SREG_VM & (((dst) & (~res)) >> (15U - SREG_V)));
  adiw_tail();
