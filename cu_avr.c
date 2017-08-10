@@ -601,7 +601,7 @@ static void  cu_avr_write_io(auint port, auint val)
    }
    break;
 
-  case 0xF5U:         /* Add / Subtract anomalies */
+  case 0xF5U:         /* Increment / Decrement anomalies */
 
    if (!alu_ismod){   /* Behaviour mods disabled */
     switch (port_states[0x15U]){
