@@ -74,16 +74,16 @@ Setting emulation goals
 ------------------------------------------------------------------------------
 
 
-By default the emulator attempts to emulate one million instructions before
+By default the emulator attempts to emulate eight million cycles before
 returning. This can be modified by setting an emulation target using the
 following ports:
 
-- 0xEB: 4 byte target instruction count to emulate.
+- 0xEB: 4 byte target cycle count to emulate.
 
-The target instruction count port accepts low byte first. It can be used to
-set the total count of instructions to emulate. Note that the instruction
-counter can not be reset, so at worst case the emulator will return after
-approximately 4 billion emulated instructions.
+The target cycle count port accepts low byte first. It can be used to set the
+total count of cycles to emulate. Note that the cycle counter can not be
+reset, so at worst case the emulator will return after approximately 4 billion
+emulated cycles.
 
 
 

@@ -134,7 +134,7 @@ auint           idc_opc;
 
 
 /* Initial maximal number of cycles */
-#define CYCLE_COUNT_MAX_INI 1000000U
+#define CYCLE_COUNT_MAX_INI 8000000U
 
 
 
