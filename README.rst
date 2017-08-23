@@ -163,17 +163,20 @@ only for testing various checksum algorithms used to verify the code space).
 0xF3: Instruction logic flag behaviour anomalies.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-(Not implemented yet)
-
-Flags can be made stuck cleared or set for certain instruction. Upon the
+Flags can be made stuck cleared or set after instructions. Upon the
 execution of the affected instruction, the flags (SREG) will be modified
 according to the OR and AND masks defined for it.
 
-- Byte 0: OR mask for the flags.
-- Byte 1: AND mask for the flags.
-- Byte 2: Opcode to be affected.
+- Byte 0: Instruction mask, low
+- Byte 1: Instruction mask, high
+- Byte 2: Compare value, low
+- Byte 3: Compare value, high
+- Byte 4: OR mask for the flags.
+- Byte 5: AND mask for the flags.
 
-The opcode accords with the translated instruction set, see cu_avrc.h.
+The feature applies the Instruction mask (AND) on the opcode word to process,
+then if the result matches the Compare value, after the processing of the
+instruction, the flags are modified according to the OR & AND masks.
 
 
 0xF4: Instruction destination anomalies.

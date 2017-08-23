@@ -89,7 +89,7 @@ boole           guard_isacc;
 auint           port_states[0x20U];
 
 /* Port data for 0xE0 - 0xFF */
-uint8           port_data[0x20U][4U];
+uint8           port_data[0x20U][8U];
 
 /* Stuck bits, AND mask, RAM */
 uint8           stuck_0_mem[4096U];
@@ -130,6 +130,17 @@ auint           idc_val;
 /* Inc/dec anomalies: Affected translated opcode */
 auint           idc_opc;
 
+/* Flag behaviour anomalies, instruction mask */
+auint           flag_mask;
+
+/* Flag behaviour anomalies, instruction compare */
+auint           flag_comp;
+
+/* Flag behaviour anomalies, OR mask */
+auint           flag_or;
+
+/* Flag behaviour anomalies, AND mask */
+auint           flag_and;
 
 
 
@@ -601,6 +612,30 @@ static void  cu_avr_write_io(auint port, auint val)
    }
    break;
 
+  case 0xF3U:         /* Flag anomalies */
+
+   if (!alu_ismod){   /* Behaviour mods disabled */
+    switch (port_states[0x13U]){
+     case 0U: port_data[0x13U][0U] = cval; port_states[0x13U]++; break;
+     case 1U: port_data[0x13U][1U] = cval; port_states[0x13U]++; break;
+     case 2U: port_data[0x13U][2U] = cval; port_states[0x13U]++; break;
+     case 3U: port_data[0x13U][3U] = cval; port_states[0x13U]++; break;
+     case 4U: port_data[0x13U][4U] = cval; port_states[0x13U]++; break;
+     default:
+      flag_mask = ((auint)(port_data[0x13U][0U])     ) |
+                  ((auint)(port_data[0x13U][1U]) << 8);
+      flag_comp = ((auint)(port_data[0x13U][2U])     ) |
+                  ((auint)(port_data[0x13U][3U]) << 8);
+      flag_or   = port_data[0x13U][4U];
+      flag_and  = cval;
+      port_states[0x13U] = 0U;
+      break;
+    }
+   }else{
+    cval = pval;
+   }
+   break;
+
   case 0xF5U:         /* Increment / Decrement anomalies */
 
    if (!alu_ismod){   /* Behaviour mods disabled */
@@ -781,6 +816,8 @@ void  cu_avr_reset(void)
  cond_mask          = 0U;
  cond_comp          = 0U;
  idc_opc            = 0xFFU;
+ flag_mask          = 0U;
+ flag_comp          = 0U;
 
  for (i = 0U; i < 0x20U; i++){
   port_states[i] = 0U;
