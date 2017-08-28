@@ -1009,8 +1009,8 @@ static void cu_avr_exec(void)
 
  if (alu_ismod){
   if (flag_mask != 0U){
-   if ( ( ( ((auint)(cpu_state.crom[((cpu_state.pc & 0x7FFFU) << 1)     ])     ) |
-            ((auint)(cpu_state.crom[((cpu_state.pc & 0x7FFFU) << 1) + 1U]) << 8) ) &
+   if ( ( ( ((auint)(cpu_state.crom[(((cpu_state.pc - 1U) & 0x7FFFU) << 1)     ])     ) |
+            ((auint)(cpu_state.crom[(((cpu_state.pc - 1U) & 0x7FFFU) << 1) + 1U]) << 8) ) &
           flag_mask) == flag_comp){
     cpu_state.iors[CU_IO_SREG] |= flag_or;
     cpu_state.iors[CU_IO_SREG] &= flag_and;
