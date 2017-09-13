@@ -34,40 +34,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef USE_SDL1
-#include <SDL/SDL.h>
-#else
-#include <SDL2/SDL.h>
-#endif
-#ifdef __EMSCRIPTEN__
-#include <emscripten.h>
-#endif
 
 
 
 /* Macro for the message / error string output. This is used to redirect or
 ** cancel messages or errors in certain builds. */
-#if (FLAG_NOCONSOLE != 0)
-#define print_error(...)
-#define print_message(...)
-#define print_unf(str)
-#else
-#ifdef __EMSCRIPTEN__
-#if (FLAG_SELFCONT != 0)
-#define print_error(...)
-#define print_message(...)
-#define print_unf(str) fputs(str, stdout)
-#else
 #define print_error(...) fprintf(stderr, __VA_ARGS__)
 #define print_message(...) printf(__VA_ARGS__)
 #define print_unf(str) fputs(str, stdout)
-#endif
-#else
-#define print_error(...) fprintf(stderr, __VA_ARGS__)
-#define print_message(...) printf(__VA_ARGS__)
-#define print_unf(str) fputs(str, stdout)
-#endif
-#endif
 
 
 
